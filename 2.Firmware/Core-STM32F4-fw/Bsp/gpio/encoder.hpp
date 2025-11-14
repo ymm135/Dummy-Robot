@@ -16,8 +16,10 @@ public:
 
     void Start();
 
+    // 读取编码器累计计数（含溢出处理），用于角度计算。
     int64_t GetCount();
 
+    // 获取当前角度；默认单位为度，可通过 _useRAD=true 切换为弧度。
     float GetAngle(bool _useRAD = false);
 
     struct Config_t

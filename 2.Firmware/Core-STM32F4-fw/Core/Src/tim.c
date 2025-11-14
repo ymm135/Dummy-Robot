@@ -723,6 +723,8 @@ void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef* tim_pwmHandle)
 /* USER CODE BEGIN 1 */
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
+    // 编码器模式溢出处理：根据 CR1.DIR 判断方向，
+    // 通过 encCntLoop[] 记录上/下溢圈数，实现 16-bit CNT 的 64-bit 扩展。
     if (htim->Instance->SR & 0x01) // count overflow
     {
         if (htim->Instance->CR1 & 0x10) // count up
@@ -745,6 +747,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 int64_t GetCntLoop(TIM_TypeDef *tim)
 {
+    // 返回编码器累计圈数(更新事件次数)，与 CNT 共同组成总计数。
     if (tim == TIM2)
     {
         return encCntLoop[0];
@@ -756,6 +759,7 @@ int64_t GetCntLoop(TIM_TypeDef *tim)
 
 void ClearCntLoop(TIM_TypeDef *tim)
 {
+    // 归零指定编码器的圈数累计，便于重新标定或归零。
     if (tim == TIM2)
     {
         encCntLoop[0] = 0;
@@ -767,6 +771,8 @@ void ClearCntLoop(TIM_TypeDef *tim)
 
 int64_t GetEncoderCount(TIM_TypeDef *tim)
 {
+    // 返回整体编码器计数：总圈数*65536 + 当前 CNT。
+    // TIM2/TIM3 使用 16-bit 计数器，结合 encCntLoop[] 实现 64-bit 聚合。
     if (tim == TIM2)
     {
         return encCntLoop[0] * 65536 + TIM2->CNT;

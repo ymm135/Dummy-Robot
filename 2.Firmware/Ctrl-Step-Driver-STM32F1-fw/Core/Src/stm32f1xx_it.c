@@ -55,11 +55,21 @@ extern void GpioPin7InterruptCallback();
 extern void Tim1Callback100Hz();
 extern void Tim3CaptureCallback();
 extern void Tim4Callback20kHz();
+// 回调职责说明：
+// - GpioPin7InterruptCallback：GPIO7 外部中断事件处理（例如按键/限位触发）。
+// - Tim1Callback100Hz：100Hz 慢速周期任务（通信心跳、参数刷新、状态上报等）。
+// - Tim3CaptureCallback：TIM3 捕获事件处理（外部脉冲/测速/编码器采样）。
+// - Tim4Callback20kHz：20kHz 高速控制任务（闭环控制/步进脉冲时序），对实时性要求高。
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+// 中断设计要点：
+// - 对实时性要求高的中断（如 TIM4 20kHz）在入口直接调用用户回调并 return，
+//   避免 HAL 通用处理带来的额外开销，降低抖动与延迟。
+// - TIM1 100Hz 慢速任务亦采用直接回调模式，统一调度策略。
+// - USART1 采用 IDLE 中断 + DMA 的“帧结束”检测，提高吞吐与确定性。
 
 /* USER CODE END 0 */
 
@@ -316,6 +326,8 @@ void CAN1_SCE_IRQHandler(void)
 void EXTI9_5_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI9_5_IRQn 0 */
+    // 当前固件未处理 EXTI[9:5]（GPIO7）事件，直接 return，避免触发 HAL_GPIO_EXTI_IRQHandler。
+    // 如需启用，请移除 return 并调用 GpioPin7InterruptCallback() 或 HAL_GPIO_EXTI_IRQHandler。
     return;
   /* USER CODE END EXTI9_5_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_7);
@@ -330,6 +342,7 @@ void EXTI9_5_IRQHandler(void)
 void TIM1_UP_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_IRQn 0 */
+    // 100Hz 慢速任务：直接调用 Tim1Callback100Hz() 并返回，绕过 HAL，引入更小中断开销
     Tim1Callback100Hz();
     return;
   /* USER CODE END TIM1_UP_IRQn 0 */
@@ -345,6 +358,7 @@ void TIM1_UP_IRQHandler(void)
 void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
+    // 当前未使用 TIM3 全局中断路径（输入捕获通过其他方式处理或暂未启用），直接返回
     return;
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
@@ -359,6 +373,7 @@ void TIM3_IRQHandler(void)
 void TIM4_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM4_IRQn 0 */
+    // 20kHz 高速控制入口：直接调用 Tim4Callback20kHz() 并返回，保证最小中断开销与确定性
     Tim4Callback20kHz();
     return;
   /* USER CODE END TIM4_IRQn 0 */
@@ -374,6 +389,11 @@ void TIM4_IRQHandler(void)
 void USART1_IRQHandler(void)
 {
   /* USER CODE BEGIN USART1_IRQn 0 */
+    // 使用 UART IDLE 中断 + DMA 方式进行“帧结束”检测：
+    // 1) 检测 IDLE 置位 -> 清除 IDLE 标志；
+    // 2) 停止 DMA，读取剩余计数 -> 计算本帧有效长度；
+    // 3) 调用 OnRecvEnd(buf, len) 处理协议；
+    // 4) 清理缓冲并重新启动 DMA 接收，提高吞吐与确定性。
     if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE) != RESET))
     {
         __HAL_UART_CLEAR_IDLEFLAG(&huart1);

@@ -1,4 +1,4 @@
-// ported to STM32 HAL library from Arduino code
+// 迁移自 Arduino 版本，适配 STM32 HAL I2C 驱动
 
 
 #ifndef _I2CDEV_H_
@@ -14,11 +14,15 @@
 #define true 1
 #define false 0
 
-// 1000ms default read timeout (modify with "I2Cdev::readTimeout = [ms];")
+// 读操作默认超时 1000ms (可通过 I2Cdev_readTimeout 修改)
 #define I2CDEV_DEFAULT_READ_TIMEOUT     1000
 
+// 初始化：绑定一个 HAL I2C 句柄，后续读写均使用该总线。
 void I2Cdev_init(I2C_HandleTypeDef *hi2c);
 
+// 读/写 API 说明：
+// - readBit(s)/readByte(s)/readWord(s)：从设备寄存器读取位/字节/字，带可选超时。
+// - writeBit(s)/writeByte(s)/writeWord(s)：写入位/字节/字，内部会先读-改-写。
 uint8_t I2Cdev_readBit(uint8_t devAddr, uint8_t regAddr, uint8_t bitNum, uint8_t *data,
                        uint16_t timeout = I2CDEV_DEFAULT_READ_TIMEOUT);
 uint8_t I2Cdev_readBitW(uint8_t devAddr, uint8_t regAddr, uint8_t bitNum, uint16_t *data,

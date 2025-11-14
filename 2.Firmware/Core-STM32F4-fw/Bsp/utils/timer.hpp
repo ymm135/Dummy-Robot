@@ -17,10 +17,16 @@ private:
     void CalcRegister(uint32_t _freqHz);
 
 public:
+    // 轻量定时器封装：
+    // - 以指定 TIM 实例为基础，根据 APB 时钟域计算 PSC/ARR；
+    // - 提供用户回调注册与中断启动；
+    // - 默认频率 100Hz，可通过构造参数覆盖。
     explicit Timer(TIM_HandleTypeDef *_htim, uint32_t _freqHz = 100);
 
+    // 注册用户回调（在中断上下文调用），仅支持 TIM7/10/11/13/14。
     void SetCallback(TimerCallback_t _timerCallback);
 
+    // 启动定时器并开启更新中断。
     void Start();
 };
 

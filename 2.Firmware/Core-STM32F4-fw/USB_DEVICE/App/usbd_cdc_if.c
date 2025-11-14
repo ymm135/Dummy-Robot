@@ -125,6 +125,10 @@ uint8_t CDCTxBufferFS[APP_TX_DATA_SIZE];
 uint8_t REFTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
+/* 说明：本工程复用了两组 CDC 端点对（CDC/ODRIVE），
+ * - CDCRx/TxBufferFS 对应 CDC_OUT_EP；
+ * - REFRx/TxBufferFS 对应 ODRIVE_OUT_EP；
+ * 可实现两路独立的 USB CDC 数据通道并行工作。*/
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -183,6 +187,8 @@ static int8_t CDC_Init_FS(void)
     USBD_CDC_SetRxBuffer(&hUsbDeviceFS, CDCRxBufferFS, CDC_OUT_EP);
     USBD_CDC_SetTxBuffer(&hUsbDeviceFS, REFTxBufferFS, 0, ODRIVE_OUT_EP);
     USBD_CDC_SetRxBuffer(&hUsbDeviceFS, REFRxBufferFS, ODRIVE_OUT_EP);
+    /* 说明：初始化时分别绑定两组端点的收发缓冲区，
+     * 使得不同端点的数据通路互不影响，可独立发送/接收。*/
     return (USBD_OK);
     /* USER CODE END 3 */
 }
@@ -294,6 +300,7 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len, uint8_t endpoint_pair)
 {
     /* USER CODE BEGIN 6 */
+    // USB OUT 数据到达：直接将完整包转交上层处理（含端点标识）。
     usb_rx_process_packet(Buf, *Len, endpoint_pair);
 
     return (USBD_OK);
@@ -338,6 +345,7 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len, uint8_t endpoint_pair)
     // Check for ongoing transmission
     if (hEP_Tx->State != 0)
         return USBD_BUSY;
+    // 拷贝用户数据至对应端点的发送缓冲，并触发发送。
     // memcpy Buf into UserTxBufferFS
     memcpy(TxBuff, Buf, Len);
     // Update Len

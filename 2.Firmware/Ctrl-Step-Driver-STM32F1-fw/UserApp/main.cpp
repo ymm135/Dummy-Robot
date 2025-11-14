@@ -17,6 +17,12 @@ Led statusLed;
 
 
 /* Main Entry ----------------------------------------------------------------*/
+// 系统主入口：
+// - 根据唯一序列号映射默认关节 NodeID（J1~J6）；
+// - 应用 EEPROM 中的电机与控制参数（若无则写入默认值）；
+// - 绑定驱动/编码器并初始化；
+// - 启动 100Hz/20kHz 两个定时器中断，分别用于慢速任务与闭环控制；
+// - 按键事件：Button1 切换/停止模式、Button2 清除堵转或快速归零。
 void Main()
 {
     uint64_t serialNum = GetSerialNumber();
@@ -48,7 +54,14 @@ void Main()
 
 
     /*---------- Apply EEPROM Settings ----------*/
-    // Setting priority is EEPROM > Motor.h
+    // 设置优先级：EEPROM > Motor.h 默认参数
+    // 字段含义：
+    // - currentLimit：额定电流(A)
+    // - velocityLimit：额定速度(电机细分步/秒)，等效“r/s * 细分步/圈”
+    // - velocityAcc：额定加速度(细分步/秒^2)
+    // - dce_*：DCE 控制器参数(kp/kv/ki/kd)
+    // - enableMotorOnBoot/enableStallProtect：上电使能与堵转保护开关
+    // - encoderHomeOffset：编码器零点偏移(细分步)
     EEPROM eeprom;
     eeprom.get(0, boardConfig);
     if (boardConfig.configStatus != CONFIG_OK) // use default settings
@@ -75,6 +88,7 @@ void Main()
     motor.config.motionParams.ratedCurrent = boardConfig.currentLimit;
     motor.config.motionParams.ratedVelocity = boardConfig.velocityLimit;
     motor.config.motionParams.ratedVelocityAcc = boardConfig.velocityAcc;
+    // 规划器加速度设置：统一使用 EEPROM 配置
     motor.motionPlanner.velocityTracker.SetVelocityAcc(boardConfig.velocityAcc);
     motor.motionPlanner.positionTracker.SetVelocityAcc(boardConfig.velocityAcc);
     motor.config.motionParams.caliCurrent = boardConfig.calibrationCurrent;
@@ -100,6 +114,9 @@ void Main()
 
     /*------- Start Close-Loop Control Tick ------*/
     HAL_Delay(100);
+    // 定时器：
+    // - TIM1: 100Hz 慢速任务(按钮扫描、状态灯、通信处理等)
+    // - TIM4: 20kHz 快速闭环控制(编码器采样、PWM/步进驱动输出)
     HAL_TIM_Base_Start_IT(&htim1);  // 100Hz
     HAL_TIM_Base_Start_IT(&htim4);  // 20kHz
 
@@ -130,6 +147,7 @@ extern "C" void Tim1Callback100Hz()
 {
     __HAL_TIM_CLEAR_IT(&htim1, TIM_IT_UPDATE);
 
+    // 10ms Tick：按钮扫描与状态灯显示随控制器状态变化
     button1.Tick(10);
     button2.Tick(10);
     statusLed.Tick(10, motor.controller->state);
@@ -140,6 +158,7 @@ extern "C" void Tim4Callback20kHz()
 {
     __HAL_TIM_CLEAR_IT(&htim4, TIM_IT_UPDATE);
 
+    // 20kHz Tick：优先执行编码器标定，否则执行正常电机闭环
     if (encoderCalibrator.isTriggered)
         encoderCalibrator.Tick20kHz();
     else
@@ -147,6 +166,7 @@ extern "C" void Tim4Callback20kHz()
 }
 
 
+// Button1：单击在默认模式与 STOP 间切换；长按触发系统复位
 void OnButton1Event(Button::Event _event)
 {
     switch (_event)
@@ -159,12 +179,14 @@ void OnButton1Event(Button::Event _event)
             HAL_NVIC_SystemReset();
             break;
         case ButtonBase::CLICK:
+            // 若当前运行非 STOP，则保存当前模式为默认并请求 STOP
             if (motor.controller->modeRunning != Motor::MODE_STOP)
             {
                 boardConfig.defaultMode = motor.controller->modeRunning;
                 motor.controller->requestMode = Motor::MODE_STOP;
             } else
             {
+                // 否则按 EEPROM 记录的默认模式恢复运行
                 motor.controller->requestMode = static_cast<Motor::Mode_t>(boardConfig.defaultMode);
             }
             break;
@@ -172,6 +194,7 @@ void OnButton1Event(Button::Event _event)
 }
 
 
+// Button2：长按快速清零当前模式的目标；单击清除堵转标志
 void OnButton2Event(Button::Event _event)
 {
     switch (_event)
@@ -202,6 +225,7 @@ void OnButton2Event(Button::Event _event)
             }
             break;
         case ButtonBase::CLICK:
+            // 清除堵转保护标志，允许重新运行
             motor.controller->ClearStallFlag();
             break;
     }

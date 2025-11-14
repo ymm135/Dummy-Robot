@@ -2,6 +2,7 @@
 
 PWM::PWM(uint32_t _freqHzA, uint32_t _freqHzB)
 {
+    // 频率保护：限制在 10~84kHz，有效避免分频系数异常。
     if (_freqHzA > 84000)_freqHzA = 84000;
     else if (_freqHzA < 10)_freqHzA = 10;
 
@@ -12,6 +13,7 @@ PWM::PWM(uint32_t _freqHzA, uint32_t _freqHzB)
     TIM_OC_InitTypeDef sConfigOC = {0};
 
     htim9.Instance = TIM9;
+    // TIM9(APB2): 168MHz/分频 -> 计数频率，Period=999 实现 1000 份占空比。
     htim9.Init.Prescaler = 168000 / _freqHzA - 1;
     htim9.Init.CounterMode = TIM_COUNTERMODE_UP;
     htim9.Init.Period = 999;
@@ -36,6 +38,7 @@ PWM::PWM(uint32_t _freqHzA, uint32_t _freqHzB)
     HAL_TIM_MspPostInit(&htim9);
 
     htim12.Instance = TIM12;
+    // TIM12(APB1): 84MHz/分频 -> 计数频率，Period=999 同上。
     htim12.Init.Prescaler = 84000 / _freqHzB - 1;
     htim12.Init.CounterMode = TIM_COUNTERMODE_UP;
     htim12.Init.Period = 999;
@@ -63,6 +66,7 @@ PWM::PWM(uint32_t _freqHzA, uint32_t _freqHzB)
 
 void PWM::Start(PWM::PwmChannel_t _channel)
 {
+    // 启动指定通道 PWM 输出；默认将 CCR 设为 0（占空比 0）。
     switch (_channel)
     {
         case CH_A1:
@@ -101,6 +105,7 @@ void PWM::SetDuty(PWM::PwmChannel_t _channel, float _duty)
 
     auto ccr = static_cast<uint32_t>(1000 * _duty);
 
+    // 将占空比映射到 CCR（0~999），并应用到对应通道。
     switch (_channel)
     {
         case CH_A1:

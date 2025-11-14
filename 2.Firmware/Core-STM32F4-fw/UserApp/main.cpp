@@ -17,6 +17,8 @@ DummyRobot dummy(&hcan1);
 osThreadId_t controlLoopFixUpdateHandle;
 void ThreadControlLoopFixUpdate(void* argument)
 {
+    // 固定周期控制线程：
+    // 由 TIM7 中断通过通知唤醒；根据当前命令模式进行关节控制或仅状态更新。
     for (;;)
     {
         // Suspended here until got Notification.
@@ -51,6 +53,7 @@ void ThreadControlLoopFixUpdate(void* argument)
 osThreadId_t ControlLoopUpdateHandle;
 void ThreadControlLoopUpdate(void* argument)
 {
+    // 命令处理线程：阻塞等待 USB/串口等上行命令，解析后下发控制。
     for (;;)
     {
         dummy.commandHandler.ParseCommand(dummy.commandHandler.Pop(osWaitForever));
@@ -61,6 +64,7 @@ void ThreadControlLoopUpdate(void* argument)
 osThreadId_t oledTaskHandle;
 void ThreadOledUpdate(void* argument)
 {
+    // OLED 状态展示线程：周期采样 IMU 与机器人状态，绘制到屏幕。
     uint32_t t = micros();
     char buf[16];
     char cmdModeNames[4][4] = {"SEQ", "INT", "TRJ", "TUN"};
@@ -120,6 +124,7 @@ void ThreadOledUpdate(void* argument)
 /* Timer Callbacks -------------------------------------------------------*/
 void OnTimer7Callback()
 {
+    // TIM7 更新中断回调：唤醒固定周期控制线程并触发一次上下文切换。
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
     // Wake & invoke thread IMMEDIATELY.
@@ -131,6 +136,7 @@ void OnTimer7Callback()
 /* Default Entry -------------------------------------------------------*/
 void Main(void)
 {
+    // 系统主入口：初始化通信、机器人、传感器、显示与用户线程，并启动控制定时器。
     // Init all communication staff, including USB-CDC/VCP/UART/CAN etc.
     InitCommunication();
 

@@ -1,5 +1,6 @@
 #include "communication.hpp"
 #include "dummy_robot.h"
+#include <stdio.h>
 
 inline float AbsMaxOf6(DOF6Kinematic::Joint6D_t _joints, uint8_t &_index)
 {
@@ -17,6 +18,9 @@ inline float AbsMaxOf6(DOF6Kinematic::Joint6D_t _joints, uint8_t &_index)
 }
 
 
+// 机器人实例：
+// - 初始化每个关节的执行器参数：是否反向、减速比(电机圈/关节圈)、关节角度软限位；
+// - 初始化 6 轴运动学求解器的几何参数(单位：米)。
 DummyRobot::DummyRobot(CAN_HandleTypeDef* _hcan) :
     hcan(_hcan)
 {
@@ -70,6 +74,11 @@ void DummyRobot::MoveJoints(DOF6Kinematic::Joint6D_t _joints)
 
 bool DummyRobot::MoveJ(float _j1, float _j2, float _j3, float _j4, float _j5, float _j6)
 {
+    // 关节空间点到点运动：
+    // 1) 边界检查；
+    // 2) 计算各关节角度增量(delta)；
+    // 3) 用最大角度估算总时长(结合减速比，近似以最大电机圈数/关节速度得到时间)，并分配各关节速度；
+    // 4) 设置目标并重置完成标志，随后由回调驱动下发到各关节。
     DOF6Kinematic::Joint6D_t targetJointsTmp(_j1, _j2, _j3, _j4, _j5, _j6);
     bool valid = true;
 
@@ -85,6 +94,7 @@ bool DummyRobot::MoveJ(float _j1, float _j2, float _j3, float _j4, float _j5, fl
         DOF6Kinematic::Joint6D_t deltaJoints = targetJointsTmp - currentJoints;
         uint8_t index;
         float maxAngle = AbsMaxOf6(deltaJoints, index);
+        // 估算总时间：最大关节角度 * 减速比(电机圈/关节圈) / 关节速度(°/s)
         float time = maxAngle * (float) (motorJ[index + 1]->reduction) / jointSpeed;
         for (int j = 1; j <= 6; j++)
         {
@@ -104,6 +114,11 @@ bool DummyRobot::MoveJ(float _j1, float _j2, float _j3, float _j4, float _j5, fl
 
 bool DummyRobot::MoveL(float _x, float _y, float _z, float _a, float _b, float _c)
 {
+    // 直线运动：
+    // 1) 调用 IK 求解得到 8 套候选关节解；
+    // 2) 逐一检查关节软限位，筛出有效解；
+    // 3) 选择与当前姿态差异(最大关节角度)最小的解，保证运动连续；
+    // 4) 转交给 MoveJ 以统一边界与速度分配逻辑。
     DOF6Kinematic::Pose6D_t pose6D(_x, _y, _z, _a, _b, _c);
     DOF6Kinematic::IKSolves_t ikSolves{};
     DOF6Kinematic::Joint6D_t lastJoint6D{};
@@ -166,6 +181,7 @@ void DummyRobot::UpdateJointAngles()
 
 void DummyRobot::UpdateJointAnglesCallback()
 {
+    // 由定时回调驱动：采样各关节角度并维护完成状态位（1 表示该关节到达目标）。
     for (int i = 1; i <= 6; i++)
     {
         currentJoints.a[i - 1] = motorJ[i]->angle + initPose.a[i - 1];
@@ -232,6 +248,7 @@ void DummyRobot::CalibrateHomeOffset()
 
 void DummyRobot::Homing()
 {
+    // 回零过程：临时降低速度，执行两段到位，直至全部停止。
     float lastSpeed = jointSpeed;
     SetJointSpeed(10);
 
@@ -269,6 +286,7 @@ void DummyRobot::SetEnable(bool _enable)
 void DummyRobot::UpdateJointPose6D()
 {
     dof6Solver->SolveFK(currentJoints, currentPose6D);
+    // FK 输出位置单位为米(m)，此处转换为毫米(mm)用于对外接口一致性
     currentPose6D.X *= 1000; // m -> mm
     currentPose6D.Y *= 1000; // m -> mm
     currentPose6D.Z *= 1000; // m -> mm

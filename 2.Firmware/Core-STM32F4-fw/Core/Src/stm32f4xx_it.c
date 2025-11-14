@@ -445,6 +445,8 @@ void UART5_IRQHandler(void)
   */
 void TIM6_DAC_IRQHandler(void)
 {
+  // TIM6 全局中断入口(DAC 下溢也会路由至此)。
+  // HAL_TIM_IRQHandler 将进一步调用用户注册的回调(如定时基准/系统节拍等)。
   /* USER CODE BEGIN TIM6_DAC_IRQn 0 */
 
   /* USER CODE END TIM6_DAC_IRQn 0 */
@@ -459,6 +461,8 @@ void TIM6_DAC_IRQHandler(void)
   */
 void TIM7_IRQHandler(void)
 {
+  // TIM7 全局中断入口：转发到 HAL 层做统一处理，
+  // 用户层可在 HAL 回调中进行固定周期任务(例如控制循环触发)。
   /* USER CODE BEGIN TIM7_IRQn 0 */
 
   /* USER CODE END TIM7_IRQn 0 */
@@ -473,6 +477,8 @@ void TIM7_IRQHandler(void)
   */
 void DMA2_Stream0_IRQHandler(void)
 {
+  // DMA2 Stream0 中断入口：此流常用于 ADC1 数据搬运，
+  // HAL_DMA_IRQHandler 负责清标志并唤醒相关回调/任务(如采样完成处理)。
   /* USER CODE BEGIN DMA2_Stream0_IRQn 0 */
 
   /* USER CODE END DMA2_Stream0_IRQn 0 */
@@ -487,6 +493,8 @@ void DMA2_Stream0_IRQHandler(void)
   */
 void CAN2_TX_IRQHandler(void)
 {
+  // CAN2 TX 中断入口：发送邮箱状态变化由 HAL_CAN_IRQHandler 统一处理，
+  // 上层可在回调中释放发送信号量/继续队列发送。
   /* USER CODE BEGIN CAN2_TX_IRQn 0 */
 
   /* USER CODE END CAN2_TX_IRQn 0 */
@@ -501,6 +509,7 @@ void CAN2_TX_IRQHandler(void)
   */
 void CAN2_RX0_IRQHandler(void)
 {
+  // CAN2 FIFO0 接收中断入口：在 HAL 回调中取出报文并分发到业务处理。
   /* USER CODE BEGIN CAN2_RX0_IRQn 0 */
 
   /* USER CODE END CAN2_RX0_IRQn 0 */
@@ -515,6 +524,7 @@ void CAN2_RX0_IRQHandler(void)
   */
 void CAN2_RX1_IRQHandler(void)
 {
+  // CAN2 FIFO1 接收中断入口：同上，交由 HAL 统一处理后触发用户回调。
   /* USER CODE BEGIN CAN2_RX1_IRQn 0 */
 
   /* USER CODE END CAN2_RX1_IRQn 0 */

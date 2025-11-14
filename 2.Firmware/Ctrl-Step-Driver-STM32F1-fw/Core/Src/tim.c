@@ -67,6 +67,8 @@ void MX_TIM1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM1_Init 2 */
+  // TIM1：PSC=71 -> 1MHz；ARR=9999 -> 100Hz 更新中断，用于慢速周期任务
+  // 对应中断在 stm32f1xx_it.c 的 TIM1_UP_IRQHandler 中调用 Tim1Callback100Hz()
 
   /* USER CODE END TIM1_Init 2 */
 
@@ -114,6 +116,7 @@ void MX_TIM2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM2_Init 2 */
+  // 启动 TIM2 CH3/CH4 PWM 输出；占空比由 CCR 寄存器设置，频率由定时器时基决定
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
 
@@ -173,6 +176,7 @@ void MX_TIM3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM3_Init 2 */
+  // TIM3：输入捕获 CH1（PA6），PSC=71 -> 1MHz 计数频率；用于外部脉冲/测速采集
 
   /* USER CODE END TIM3_Init 2 */
 
@@ -213,6 +217,8 @@ void MX_TIM4_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM4_Init 2 */
+  // TIM4：PSC=71 -> 1MHz；ARR=49 -> 20kHz 更新中断，用于高速闭环控制/步进脉冲时序
+  // 对应中断在 stm32f1xx_it.c 的 TIM4_IRQHandler 中调用 Tim4Callback20kHz()
 
   /* USER CODE END TIM4_Init 2 */
 
@@ -225,7 +231,8 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
   if(tim_baseHandle->Instance==TIM1)
   {
   /* USER CODE BEGIN TIM1_MspInit 0 */
-
+    // 使能 TIM1 时钟与中断，NVIC 优先级较低以避免抢占高速任务
+  
   /* USER CODE END TIM1_MspInit 0 */
     /* TIM1 clock enable */
     __HAL_RCC_TIM1_CLK_ENABLE();
@@ -234,13 +241,15 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
     HAL_NVIC_SetPriority(TIM1_UP_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(TIM1_UP_IRQn);
   /* USER CODE BEGIN TIM1_MspInit 1 */
-
+    // TIM1_UP_IRQn 优先级=5：服务 100Hz 周期任务
+  
   /* USER CODE END TIM1_MspInit 1 */
   }
   else if(tim_baseHandle->Instance==TIM3)
   {
   /* USER CODE BEGIN TIM3_MspInit 0 */
-
+    // 使能 TIM3 时钟与 PA6 输入；PA6 作为 TIM3_CH1 输入捕获源
+  
   /* USER CODE END TIM3_MspInit 0 */
     /* TIM3 clock enable */
     __HAL_RCC_TIM3_CLK_ENABLE();
@@ -258,13 +267,15 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
     HAL_NVIC_SetPriority(TIM3_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(TIM3_IRQn);
   /* USER CODE BEGIN TIM3_MspInit 1 */
-
+    // TIM3_IRQn 优先级=0：保证采样/捕获的实时性
+  
   /* USER CODE END TIM3_MspInit 1 */
   }
   else if(tim_baseHandle->Instance==TIM4)
   {
   /* USER CODE BEGIN TIM4_MspInit 0 */
-
+    // 使能 TIM4 时钟；用于 20kHz 高速控制回路，对时延敏感
+  
   /* USER CODE END TIM4_MspInit 0 */
     /* TIM4 clock enable */
     __HAL_RCC_TIM4_CLK_ENABLE();
@@ -273,7 +284,8 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
     HAL_NVIC_SetPriority(TIM4_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(TIM4_IRQn);
   /* USER CODE BEGIN TIM4_MspInit 1 */
-
+    // TIM4_IRQn 优先级=0：优先于后台任务，降低控制延迟与抖动
+  
   /* USER CODE END TIM4_MspInit 1 */
   }
 }
@@ -300,7 +312,8 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
   if(timHandle->Instance==TIM2)
   {
   /* USER CODE BEGIN TIM2_MspPostInit 0 */
-
+    // 将 PB10/PB11 复用为 TIM2_CH3/CH4 的推挽复用输出，用于 PWM
+  
   /* USER CODE END TIM2_MspPostInit 0 */
 
     __HAL_RCC_GPIOB_CLK_ENABLE();
@@ -316,7 +329,8 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
     __HAL_AFIO_REMAP_TIM2_PARTIAL_2();
 
   /* USER CODE BEGIN TIM2_MspPostInit 1 */
-
+    // 部分重映射 TIM2 到对应引脚（AFIO_REMAP_TIM2_PARTIAL_2）
+  
   /* USER CODE END TIM2_MspPostInit 1 */
   }
 

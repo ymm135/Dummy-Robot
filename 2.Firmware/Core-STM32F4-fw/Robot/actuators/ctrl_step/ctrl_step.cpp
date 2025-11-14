@@ -2,6 +2,7 @@
 #include "communication.hpp"
 
 
+// 构造：指定节点 ID、方向反转、减速比(电机圈/关节圈)与关节角度软限位。
 CtrlStepMotor::CtrlStepMotor(CAN_HandleTypeDef* _hcan, uint8_t _id, bool _inverse,
                              uint8_t _reduction, float _angleLimitMin, float _angleLimitMax) :
     nodeID(_id), hcan(_hcan), inverseDirection(_inverse), reduction(_reduction),
@@ -227,14 +228,17 @@ void CtrlStepMotor::EraseConfigs()
 }
 
 
+// 设置目标关节角度：按约定将关节角(°)换算成电机圈并下发到位置控制。
 void CtrlStepMotor::SetAngle(float _angle)
 {
     _angle = inverseDirection ? -_angle : _angle;
+    // 角度 -> 电机圈：joint_deg / 360 * reduction
     float stepMotorCnt = _angle / 360.0f * (float) reduction;
     SetPositionSetPoint(stepMotorCnt);
 }
 
 
+// 设置目标角度并限制速度：同样以减速比做角度换算。
 void CtrlStepMotor::SetAngleWithVelocityLimit(float _angle, float _vel)
 {
     _angle = inverseDirection ? -_angle : _angle;
@@ -252,10 +256,12 @@ void CtrlStepMotor::UpdateAngle()
 }
 
 
+// 回读角度回调：将电机圈换算回关节角度(°)，并维护运行状态。
 void CtrlStepMotor::UpdateAngleCallback(float _pos, bool _isFinished)
 {
     state = _isFinished ? FINISH : RUNNING;
 
+    // 电机圈 -> 角度：motor_turns / reduction * 360°
     float tmp = _pos / (float) reduction * 360;
     angle = inverseDirection ? -tmp : tmp;
 }

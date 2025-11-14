@@ -92,25 +92,26 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
-    // Init usb irq binary semaphore, and start with no tokens by removing the starting one.
+    // USB 延迟中断(Deferred IRQ)信号量：二值信号量，初始无令牌。
+    // 由 USB 中断服务例程释放，用于唤醒延迟处理线程。
     osSemaphoreDef(sem_usb_irq);
     sem_usb_irq = osSemaphoreNew(1, 0, osSemaphore(sem_usb_irq));
 
-    // Create a semaphore for UART DMA and remove a token
+    // UART4/5 DMA 传输同步：互斥式信号量，初始可用。
     osSemaphoreDef(sem_uart4_dma);
     sem_uart4_dma = osSemaphoreNew(1, 1, osSemaphore(sem_uart4_dma));
     osSemaphoreDef(sem_uart5_dma);
     sem_uart5_dma = osSemaphoreNew(1, 1, osSemaphore(sem_uart5_dma));
 
-    // Create a semaphore for USB RX, and start with no tokens by removing the starting one.
+    // USB 接收同步：二值信号量，初始无令牌，配合 CDC_Receive 回调使用。
     osSemaphoreDef(sem_usb_rx);
     sem_usb_rx = osSemaphoreNew(1, 0, osSemaphore(sem_usb_rx));
 
-    // Create a semaphore for USB TX
+    // USB 发送同步：互斥式信号量，防止并发写导致 BUSY。
     osSemaphoreDef(sem_usb_tx);
     sem_usb_tx = osSemaphoreNew(1, 1, osSemaphore(sem_usb_tx));
 
-    // Create a semaphore for CAN TX
+    // CAN 发送同步：互斥式信号量，序列化发包。
     osSemaphoreDef(sem_can1_tx);
     sem_can1_tx = osSemaphoreNew(1, 1, osSemaphore(sem_can1_tx));
     osSemaphoreDef(sem_can2_tx);
@@ -123,7 +124,8 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
-    // This Task must run before MX_USB_DEVICE_Init(), so have to put it here.
+    // USB 延迟中断线程：必须在 MX_USB_DEVICE_Init() 之前创建，
+    // 用于将硬件 IRQ 的工作量下沉到线程上下文，避免在中断里做重逻辑。
     const osThreadAttr_t usbIrqTask_attributes = {
         .name = "usbIrqTask",
         .stack_size = 500,
@@ -160,7 +162,7 @@ void StartDefaultTask(void *argument)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN StartDefaultTask */
 
-    // Invoke cpp-version main().
+    // 跳转至 C++ 版本入口 Main()：初始化通信、机器人、传感器与用户线程。
     Main();
 
     vTaskDelete(defaultTaskHandle);

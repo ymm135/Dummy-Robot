@@ -197,6 +197,9 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+// 用户定时器回调分发函数声明：
+// HAL 层在非系统滴答(TIM6)的周期中断中调用此函数，
+// 由 C++ 封装根据具体 TIM 实例分发到已注册的用户回调。
 void OnTimerCallback(TIM_TypeDef *timInstance);
 /* USER CODE END 4 */
 
@@ -219,6 +222,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 1 */
   else
   {
+      // 非系统滴答(TIM6)的周期中断，统一转发到用户层进行处理。
       OnTimerCallback(htim->Instance);
   }
   /* USER CODE END Callback 1 */

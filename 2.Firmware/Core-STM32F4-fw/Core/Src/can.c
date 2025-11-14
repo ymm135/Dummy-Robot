@@ -54,6 +54,9 @@ void MX_CAN1_Init(void)
   {
     Error_Handler();
   }
+  // 位时序说明：APB1=42MHz 时，Prescaler=7 => TQ=1/6MHz≈166.7ns；
+  // 总 TQ = 1(同步)+3(BS1)+2(BS2)=6 => 位时间≈1µs => 速率约 1Mbps。
+  // 过滤器配置与启动(HAL_CAN_Start)通常在上层模块执行，此处仅完成基本初始化。
   /* USER CODE BEGIN CAN1_Init 2 */
 
   /* USER CODE END CAN1_Init 2 */
@@ -86,6 +89,8 @@ void MX_CAN2_Init(void)
   {
     Error_Handler();
   }
+  // 位时序同 CAN1。AutoWakeUp 使能，可在总线空闲后自动唤醒。
+  // AutoRetransmission 关闭，上层需处理发送失败(如用信号量/队列重试)。
   /* USER CODE BEGIN CAN2_Init 2 */
 
   /* USER CODE END CAN2_Init 2 */
@@ -137,6 +142,8 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     HAL_NVIC_EnableIRQ(CAN1_RX1_IRQn);
     HAL_NVIC_SetPriority(CAN1_SCE_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN1_SCE_IRQn);
+    // NVIC 优先级：统一设为 5，保证与 FreeRTOS 可兼容的中断安全等级，
+    // TX/RX/SCE 分别用于邮箱状态、接收 FIFO、错误状态等事件分发。
   /* USER CODE BEGIN CAN1_MspInit 1 */
 
   /* USER CODE END CAN1_MspInit 1 */
@@ -181,6 +188,7 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     HAL_NVIC_EnableIRQ(CAN2_RX1_IRQn);
     HAL_NVIC_SetPriority(CAN2_SCE_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN2_SCE_IRQn);
+    // 中断来源与 CAN1 相同：在 HAL 回调中完成报文接收与错误处理。
   /* USER CODE BEGIN CAN2_MspInit 1 */
 
   /* USER CODE END CAN2_MspInit 1 */

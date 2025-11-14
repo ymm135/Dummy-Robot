@@ -1,5 +1,8 @@
 """
-Provides functions for the discovery of Fibre nodes
+Fibre 设备发现：
+- 提供扫描并构建远程对象的工具函数（find_all / find_any）；
+- 通过多种传输通道（USB、串口、TCP、UDP）并行发现设备；
+- 读取端点 0 的 JSON 接口定义以初始化对象树。
 """
 
 import sys
@@ -13,7 +16,7 @@ import fibre.remote_object
 from fibre.utils import Event, Logger
 from fibre.protocol import ChannelBrokenException, TimeoutError
 
-# Load all installed transport layers
+# 加载已安装的传输层：不同通道对应不同 discover_channels 实现。
 
 channel_types = {}
 
@@ -53,6 +56,12 @@ def find_all(path, serial_number,
     Starts scanning for Fibre nodes that match the specified path spec and calls
     the callback for each Fibre node that is found.
     This function is non-blocking.
+
+    中文说明：
+    - 根据 path 执行多通道并行扫描（逗号分隔支持多路并行）。
+    - 通道建立后读取端点 0（JSON 接口定义）以创建 RemoteObject。
+    - 若指定 serial_number，则仅回调匹配的设备对象。
+    - 通过 cancellation_token 与 channel_termination_token 协调退出与资源释放。
     """
 
     def did_discover_channel(channel):
@@ -62,6 +71,10 @@ def find_all(path, serial_number,
         This queries the endpoint 0 on that channel to gain information
         about the interface, which is then used to init the corresponding object.
         """
+        # 从通道初始化对象：
+        # 1) 读取端点 0 获取 ASCII JSON 接口定义；
+        # 2) 计算 CRC16 保存到通道，用于接口一致性校验；
+        # 3) 解析 JSON 并包装为 RemoteObject（根名 fibre_node）。
         try:
             logger.debug("Connecting to device on " + channel._name)
             try:
@@ -97,7 +110,7 @@ def find_all(path, serial_number,
         except Exception:
             logger.debug("Unexpected exception after discovering channel: " + traceback.format_exc())
 
-    # For each connection type, kick off an appropriate discovery loop
+    # 按照 path 前缀为每种连接类型启动对应的发现线程。
     for search_spec in path.split(','):
         prefix = search_spec.split(':')[0]
         the_rest = ':'.join(search_spec.split(':')[1:])
@@ -115,6 +128,11 @@ def find_any(path="usb", serial_number=None,
         timeout=None, logger=Logger(verbose=False)):
     """
     Blocks until the first matching Fibre node is connected and then returns that node
+
+    中文说明：
+    - 阻塞等待首个匹配设备并返回；
+    - 使用 Event 协调等待与取消；
+    - finally 中置位事件以通知 find_all 终止。
     """
     result = [ None ]
     done_signal = Event(search_cancellation_token)

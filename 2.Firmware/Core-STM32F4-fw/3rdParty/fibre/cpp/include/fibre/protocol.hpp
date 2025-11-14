@@ -13,6 +13,7 @@ see protocol.md for the protocol specification
 #include <cmath>
 //#include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 #include "crc.hpp"
 #include "cpp_utils.hpp"
 

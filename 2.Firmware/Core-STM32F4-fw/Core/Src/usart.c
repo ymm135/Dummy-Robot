@@ -55,6 +55,8 @@ void MX_UART4_Init(void)
   {
     Error_Handler();
   }
+  // 说明：UART4 作为通用串口，后续在 MSP 中开启 DMA 与中断，
+  // RX 默认采用环形缓冲(DMA_CIRCULAR)，TX 采用普通缓冲(DMA_NORMAL)。
   /* USER CODE BEGIN UART4_Init 2 */
 
   /* USER CODE END UART4_Init 2 */
@@ -83,6 +85,8 @@ void MX_UART5_Init(void)
   {
     Error_Handler();
   }
+  // 说明：UART5 配置同 UART4，用于另一条独立链路；
+  // DMA 与 NVIC 在 MSP 初始化中统一配置。
   /* USER CODE BEGIN UART5_Init 2 */
 
   /* USER CODE END UART5_Init 2 */
@@ -112,6 +116,8 @@ void MX_USART1_UART_Init(void)
   {
     Error_Handler();
   }
+  // 说明：USART1 可用于调试或上位机通信，
+  // 若需要 DMA/中断支持，参考 MSP 中的配置方式进行扩展。
   /* USER CODE BEGIN USART1_Init 2 */
 
   /* USER CODE END USART1_Init 2 */
@@ -158,6 +164,8 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     {
       Error_Handler();
     }
+    // RX 使用环形模式：持续搬运数据进环形缓冲，适合连续流。
+    // 链接到 UART4 的 hdmarx，HAL 层统一管理。
 
     __HAL_LINKDMA(uartHandle,hdmarx,hdma_uart4_rx);
 
@@ -176,12 +184,14 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     {
       Error_Handler();
     }
+    // TX 使用普通模式：每次发送一段缓冲，完成后产生中断以便继续发送或释放资源。
 
     __HAL_LINKDMA(uartHandle,hdmatx,hdma_uart4_tx);
 
     /* UART4 interrupt Init */
     HAL_NVIC_SetPriority(UART4_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(UART4_IRQn);
+    // NVIC 优先级：适配 FreeRTOS(优先级数值越小越高)，串口中断保持较低优先级以避免打断时间敏感任务。
   /* USER CODE BEGIN UART4_MspInit 1 */
 
   /* USER CODE END UART4_MspInit 1 */
@@ -230,6 +240,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     {
       Error_Handler();
     }
+    // RX 环形搬运：支持长帧或连续流接收，配合上层索引处理。
 
     __HAL_LINKDMA(uartHandle,hdmarx,hdma_uart5_rx);
 
@@ -248,12 +259,14 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     {
       Error_Handler();
     }
+    // TX 普通模式：一次性发送，完成中断后由上层继续新一段或收尾。
 
     __HAL_LINKDMA(uartHandle,hdmatx,hdma_uart5_tx);
 
     /* UART5 interrupt Init */
     HAL_NVIC_SetPriority(UART5_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(UART5_IRQn);
+    // 中断开启：配合 DMA 完成/错误中断，进入 HAL 回调后与应用层同步。
   /* USER CODE BEGIN UART5_MspInit 1 */
 
   /* USER CODE END UART5_MspInit 1 */

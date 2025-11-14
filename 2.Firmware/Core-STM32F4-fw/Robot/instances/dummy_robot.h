@@ -3,6 +3,7 @@
 
 #include "algorithms/kinematic/6dof_kinematic.h"
 #include "actuators/ctrl_step/ctrl_step.hpp"
+#include <string>
 
 #define ALL 0
 
@@ -53,6 +54,11 @@ private:
 };
 
 
+// DummyRobot：机械臂高层控制封装
+// - 维护当前/目标关节与末端位姿；
+// - 提供 MoveJ/MoveL 规划接口(调用 IK/FK 与边界检查)；
+// - 管理命令模式、速度/加速度与调试辅助；
+// - 将关节角度下发到执行器(CtrlStepMotor)，并从中回读状态。
 class DummyRobot
 {
 public:
@@ -60,6 +66,11 @@ public:
     ~DummyRobot();
 
 
+    // 命令模式：
+    // - SEQUENTIAL：顺序到达目标点，队列执行；
+    // - INTERRUPTABLE：可被新目标打断；
+    // - CONTINUES_TRAJECTORY：连续轨迹；
+    // - MOTOR_TUNING：电机调试模式（频率/幅值）。
     enum CommandMode
     {
         COMMAND_TARGET_POINT_SEQUENTIAL = 1,
@@ -104,7 +115,7 @@ public:
 
 
     // This is the pose when power on.
-    const DOF6Kinematic::Joint6D_t REST_POSE = {0, -73, 180, 0, 0, 0};
+    const DOF6Kinematic::Joint6D_t REST_POSE = {0, -73, 180, 0, 0, 0}; // 上电默认姿态(°)
     const float DEFAULT_JOINT_SPEED = 30;  // degree/s
     const DOF6Kinematic::Joint6D_t DEFAULT_JOINT_ACCELERATION_BASES = {150, 100, 200, 200, 200, 200};
     const float DEFAULT_JOINT_ACCELERATION_LOW = 30;    // 0~100
@@ -122,12 +133,15 @@ public:
     DummyHand* hand = {nullptr};
 
 
+    // 初始化机器人：设置初始模式/速度等。
     void Init();
     bool MoveJ(float _j1, float _j2, float _j3, float _j4, float _j5, float _j6);
     bool MoveL(float _x, float _y, float _z, float _a, float _b, float _c);
+    // 直接下发关节角度（带速度限制）。
     void MoveJoints(DOF6Kinematic::Joint6D_t _joints);
     void SetJointSpeed(float _speed);
     void SetJointAcceleration(float _acc);
+    // 采样并更新关节角度与完成标志。
     void UpdateJointAngles();
     void UpdateJointAnglesCallback();
     void UpdateJointPose6D();

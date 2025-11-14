@@ -7,6 +7,11 @@
 class CtrlStepMotor
 {
 public:
+    // 步进电机控制器：负责将关节角度/速度等指令转换为电机侧“圈数/速度”并通过 CAN 下发。
+    // 关键约定：
+    // - reduction：减速比，定义为“电机圈/关节圈”，即关节转 360° 需要电机转多少圈；
+    // - angle 单位：度(°)；
+    // - SetAngle/UpdateAngle：在角度与电机圈之间使用 reduction 做线性换算。
     enum State
     {
         RUNNING,
@@ -15,17 +20,18 @@ public:
     };
 
 
+    // 控制器内部每圈脉冲计数(仅供参考)：200 步/圈，256 细分 -> 51200 脉冲/电机圈
     const uint32_t CTRL_CIRCLE_COUNT = 200 * 256;
 
     CtrlStepMotor(CAN_HandleTypeDef* _hcan, uint8_t _id, bool _inverse = false, uint8_t _reduction = 1,
                   float _angleLimitMin = -180, float _angleLimitMax = 180);
 
     uint8_t nodeID;
-    float angle = 0;
+    float angle = 0;           // 当前关节角度(°)，由回读位置换算得到
     float angleLimitMax;
     float angleLimitMin;
-    bool inverseDirection;
-    uint8_t reduction;
+    bool inverseDirection;     // 方向反转标志：true 则角度取负号
+    uint8_t reduction;         // 减速比：电机圈/关节圈，用于角度与电机位置换算
     State state = STOP;
 
     void SetAngle(float _angle);

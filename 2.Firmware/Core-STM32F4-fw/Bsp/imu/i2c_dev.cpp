@@ -1,24 +1,23 @@
-// I2Cdev library collection - Main I2C device class header file
-// Abstracts bit and byte I2C R/W functions into a convenient class
+// I2Cdev 封装：将位/字节级 I2C 读写抽象为简单函数
+// 迁移自 Arduino 版本，适配 STM32 HAL I2C 驱动
 // 7/26/2018 by Saeed Bazargan <Bazargan0241@hotmail.com>
-// ported to STM32 HAL library from Arduino code
 
 #include "i2c_dev.hpp"
 
 // Hold pointer to inited HAL I2C device
-static I2C_HandleTypeDef *I2Cdev_hi2c;
+static I2C_HandleTypeDef *I2Cdev_hi2c; // 绑定的 HAL I2C 句柄(运行时设置)
 
 /** Default timeout value for read operations.
  * Set this to 0 to disable timeout detection.
  */
-uint16_t I2Cdev_readTimeout = I2CDEV_DEFAULT_READ_TIMEOUT;
+uint16_t I2Cdev_readTimeout = I2CDEV_DEFAULT_READ_TIMEOUT; // 默认读超时，可在运行时调整
 
 /** Sets device handle to use for communications
  * You can call this function and set any other device at any moment
  */
 void I2Cdev_init(I2C_HandleTypeDef *hi2c)
 {
-    I2Cdev_hi2c = hi2c;
+    I2Cdev_hi2c = hi2c; // 绑定总线：后续所有读写都走该 I2C 设备
 }
 
 /** Read a single bit from an 8-bit device register.
@@ -144,11 +143,14 @@ uint8_t I2Cdev_readWord(uint8_t devAddr, uint8_t regAddr, uint16_t *data, uint16
  */
 uint8_t I2Cdev_readBytes(uint8_t devAddr, uint8_t regAddr, uint8_t length, uint8_t *data, uint16_t timeout)
 {
+    // 读取流程：
+    // 1) 先写入要读取的寄存器地址(regAddr)，
+    // 2) 再主机接收指定长度数据；timeout=0 时退回默认超时。
     uint16_t tout = timeout > 0 ? timeout : I2CDEV_DEFAULT_READ_TIMEOUT;
 
     HAL_I2C_Master_Transmit(I2Cdev_hi2c, devAddr << 1, &regAddr, 1, tout);
     if (HAL_I2C_Master_Receive(I2Cdev_hi2c, devAddr << 1, data, length, tout) == HAL_OK) return length;
-    return -1;
+    return -1; // 返回 -1 表示失败
 }
 
 /** Read multiple words from a 16-bit device register.
@@ -161,6 +163,7 @@ uint8_t I2Cdev_readBytes(uint8_t devAddr, uint8_t regAddr, uint8_t length, uint8
  */
 uint8_t I2Cdev_readWords(uint8_t devAddr, uint8_t regAddr, uint8_t length, uint16_t *data, uint16_t timeout)
 {
+    // 16-bit 读：读取 length 个字(2*length 字节)，存储到 data 缓冲。
     uint16_t tout = timeout > 0 ? timeout : I2CDEV_DEFAULT_READ_TIMEOUT;
 
     HAL_I2C_Master_Transmit(I2Cdev_hi2c, devAddr << 1, &regAddr, 1, tout);
@@ -295,7 +298,7 @@ uint16_t I2Cdev_writeWord(uint8_t devAddr, uint8_t regAddr, uint16_t data)
  */
 uint16_t I2Cdev_writeBytes(uint8_t devAddr, uint8_t regAddr, uint8_t Size, uint8_t *pData)
 {
-    // Creating dynamic array to store regAddr + data in one buffer
+    // 写多字节：将 regAddr 作为首字节，与数据拼成一包一次发送。
     uint8_t *dynBuffer;
     dynBuffer = (uint8_t *) malloc(sizeof(uint8_t) * (Size + 1));
     dynBuffer[0] = regAddr;
@@ -305,7 +308,7 @@ uint16_t I2Cdev_writeBytes(uint8_t devAddr, uint8_t regAddr, uint8_t Size, uint8
 
     HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(I2Cdev_hi2c, devAddr << 1, dynBuffer, Size + 1, 1000);
     free(dynBuffer);
-    return status == HAL_OK;
+    return status == HAL_OK; // 返回 1 表示成功
 }
 
 /** Write multiple words to a 16-bit device register.
@@ -317,7 +320,7 @@ uint16_t I2Cdev_writeBytes(uint8_t devAddr, uint8_t regAddr, uint8_t Size, uint8
  */
 uint16_t I2Cdev_writeWords(uint8_t devAddr, uint8_t regAddr, uint8_t length, uint16_t *data)
 {
-    // Creating dynamic array to store regAddr + data in one buffer
+    // 写多字：同上，注意长度为字节计数(sizeof(uint16_t)*length)。
     uint8_t *dynBuffer;
     dynBuffer = (uint8_t *) malloc(sizeof(uint8_t) + sizeof(uint16_t) * length);
     dynBuffer[0] = regAddr;

@@ -82,9 +82,16 @@ static void EulerAngleToRotMat(const float* _eulerAngles, float* _rotationM)
 }
 
 
+// 构造：注入几何参数(单位：米)，并初始化 DH 与关键几何向量。
+// 参数说明：
+// - L_BS/D_BS：底座高度与水平偏移；
+// - L_AM/L_FA：上臂与前臂长度；
+// - D_EW：肘部侧向偏移；
+// - L_WT：腕部到法兰长度。
 DOF6Kinematic::DOF6Kinematic(float L_BS, float D_BS, float L_AM, float L_FA, float D_EW, float L_WT)
     : armConfig(ArmConfig_t{L_BS, D_BS, L_AM, L_FA, D_EW, L_WT})
 {
+    // DH 表(θ0, d, a, α)：θ0 为静态偏置；d 为沿 Z 位移；a 为沿 X 位移；α 为扭转角。
     float tmp_DH_matrix[6][4] = {
         {0.0f,            armConfig.L_BASE,    armConfig.D_BASE, -(float) M_PI_2},
         {-(float) M_PI_2, 0.0f,                armConfig.L_ARM,  0.0f},
@@ -95,6 +102,7 @@ DOF6Kinematic::DOF6Kinematic(float L_BS, float D_BS, float L_AM, float L_FA, flo
     };
     memcpy(DH_matrix, tmp_DH_matrix, sizeof(tmp_DH_matrix));
 
+    // 关键几何向量：基座、上臂、肘部与腕部在各自坐标系下的位移
     float tmp_L1_bs[3] = {armConfig.D_BASE, -armConfig.L_BASE, 0.0f};
     memcpy(L1_base, tmp_L1_bs, sizeof(tmp_L1_bs));
     float tmp_L2_se[3] = {armConfig.L_ARM, 0.0f, 0.0f};
@@ -104,6 +112,7 @@ DOF6Kinematic::DOF6Kinematic(float L_BS, float D_BS, float L_AM, float L_FA, flo
     float tmp_L6_wt[3] = {0.0f, 0.0f, armConfig.L_WRIST};
     memcpy(L6_wrist, tmp_L6_wt, sizeof(tmp_L6_wt));
 
+    // 预计算距离与角度，用于 IK 中三角求解(余弦定理)
     l_se_2 = armConfig.L_ARM * armConfig.L_ARM;
     l_se = armConfig.L_ARM;
     l_ew_2 = armConfig.L_FOREARM * armConfig.L_FOREARM + armConfig.D_ELBOW * armConfig.D_ELBOW;
@@ -111,6 +120,9 @@ DOF6Kinematic::DOF6Kinematic(float L_BS, float D_BS, float L_AM, float L_FA, flo
     atan_e = 0;
 }
 
+// 正运动学(FK)：
+// 输入关节角(度)，内部换算为弧度并构造每级齐次变换，逐级相乘得到 T06。
+// 输出末端位姿：位置单位为米(m)，姿态欧拉角为度(°)，同时返回旋转矩阵 R06。
 bool
 DOF6Kinematic::SolveFK(const DOF6Kinematic::Joint6D_t &_inputJoint6D, DOF6Kinematic::Pose6D_t &_outputPose6D)
 {
@@ -166,6 +178,7 @@ DOF6Kinematic::SolveFK(const DOF6Kinematic::Joint6D_t &_inputJoint6D, DOF6Kinema
     for (int i = 0; i < 3; i++)
         P06[i] = L0_bs[i] + L0_se[i] + L0_ew[i] + L0_wt[i];
 
+    // 将旋转矩阵转换为欧拉角(内部弧度)
     RotMatToEulerAngle(R06, &(P06[3]));
 
     _outputPose6D.X = P06[0];
@@ -179,6 +192,13 @@ DOF6Kinematic::SolveFK(const DOF6Kinematic::Joint6D_t &_inputJoint6D, DOF6Kinema
     return true;
 }
 
+// 逆运动学(IK)：
+// 输入：末端位姿(位置建议以毫米 mm 传入；姿态以度或直接给 R)。
+// 过程：
+//  1) 肩关节 J1 左/右两解；
+//  2) SEW 三角形余弦定理解算 J2/J3 的肘上/肘下两解；
+//  3) 腕姿态 J4/J5/J6 两解；最终组合形成 8 套候选解。
+// 输出：8 套解与标志位(solFlag)，并保留 R06 以便后续检查。
 bool DOF6Kinematic::SolveIK(const DOF6Kinematic::Pose6D_t &_inputPose6D, const Joint6D_t &_lastJoint6D,
                             DOF6Kinematic::IKSolves_t &_outputSolves)
 {
@@ -209,6 +229,7 @@ bool DOF6Kinematic::SolveIK(const DOF6Kinematic::Pose6D_t &_inputPose6D, const J
         atan_e = atanf(armConfig.D_ELBOW / armConfig.L_FOREARM);
     }
 
+    // 单位换算：位置从 mm 转为 m 参与计算
     P06[0] = _inputPose6D.X / 1000.0f;
     P06[1] = _inputPose6D.Y / 1000.0f;
     P06[2] = _inputPose6D.Z / 1000.0f;
@@ -255,6 +276,7 @@ bool DOF6Kinematic::SolveIK(const DOF6Kinematic::Pose6D_t &_inputPose6D, const J
             _outputSolves.solFlag[4 + i][0] = 1;
         }
     }
+    // Step1：肩关节 J1，两对称解(左/右肩)
     for (ind_arm = 0; ind_arm < 2; ind_arm++)
     {
         cosqs = cosf(qs[ind_arm] + DH_matrix[0][0]);
