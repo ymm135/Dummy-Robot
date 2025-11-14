@@ -1,5 +1,12 @@
 #ifndef REF_STM32F4_ANALOG_H
 #define REF_STM32F4_ANALOG_H
+/*
+ * 基础特性概览（模拟量采样）
+ * - 职责：封装 ADC 通道读取与芯片内部温度计算。
+ * - 通道映射：CH1~CH4 对应板载模拟输入；通过 HAL ADC 获取原始值。
+ * - 单位：GetVoltage 返回伏特；GetRaw 返回原始码；温度为摄氏度。
+ * - 时序：建议在采样任务中调用，避免 ISR 做浮点换算。
+ */
 
 #include <cstdint>
 #include <adc.h>

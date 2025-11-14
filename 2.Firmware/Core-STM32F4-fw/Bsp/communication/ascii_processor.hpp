@@ -1,5 +1,12 @@
 #ifndef __ASCII_PROTOCOL_H
 #define __ASCII_PROTOCOL_H
+/*
+ * 基础特性概览（ASCII 命令处理）
+ * - 职责：解析 ASCII 指令（查询/设置等），并通过 StreamSink 定向回传。
+ * - 通道：支持 USB、UART4、UART5 的独立命令入口函数。
+ * - 约束：避免使用 printf 广播；统一使用 Respond 定向回复。
+ * - 线程模型：解析在通信任务中执行；ISR/DMA 不做文本处理。
+ */
 
 
 /* Includes ------------------------------------------------------------------*/

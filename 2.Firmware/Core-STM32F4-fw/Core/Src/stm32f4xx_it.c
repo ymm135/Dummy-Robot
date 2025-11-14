@@ -23,6 +23,13 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+// 机械臂相关说明：
+// - TIM2/TIM3 编码器中断：配合 tim.c 的 HAL_TIM_IC_CaptureCallback 扩展圈数，
+//   提供高分辨率关节位置，并保持长时间运行的计数一致性与稳定性。
+// - TIM7 周期中断：作为控制时基(100Hz)，在 HAL_TIM_PeriodElapsedCallback 中
+//   转发到用户控制循环，确保采样与下发节奏统一以提升平滑性。
+// - CAN/UART/SPI 的 DMA/IRQ：ISR 仅做轻量搬运与唤醒，业务逻辑置于 FreeRTOS 任务，
+//   避免在中断中执行重逻辑，降低对控制周期的扰动。
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -185,7 +192,8 @@ void DebugMon_Handler(void)
 void DMA1_Stream0_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream0_IRQn 0 */
-
+  // UART5 RX DMA 完成：数据进入环形缓冲，随后由解析任务消费；
+  // ISR 不做解析，避免阻塞控制周期。
   /* USER CODE END DMA1_Stream0_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_uart5_rx);
   /* USER CODE BEGIN DMA1_Stream0_IRQn 1 */
@@ -199,7 +207,7 @@ void DMA1_Stream0_IRQHandler(void)
 void DMA1_Stream2_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream2_IRQn 0 */
-
+  // UART4 RX DMA 完成：数据进入环形缓冲，随后由解析任务消费。
   /* USER CODE END DMA1_Stream2_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_uart4_rx);
   /* USER CODE BEGIN DMA1_Stream2_IRQn 1 */
@@ -213,7 +221,7 @@ void DMA1_Stream2_IRQHandler(void)
 void DMA1_Stream4_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream4_IRQn 0 */
-
+  // UART4 TX DMA 完成：释放发送信号量/继续队列发送，串口回传节流以平滑带宽。
   /* USER CODE END DMA1_Stream4_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_uart4_tx);
   /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
@@ -334,7 +342,8 @@ void TIM1_TRG_COM_TIM11_IRQHandler(void)
 void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
-
+  // 编码器事件转发：HAL_TIM_IRQHandler 将触发 tim.c 中的
+  // HAL_TIM_IC_CaptureCallback，更新 encCntLoop 以实现 64-bit 计数。
   /* USER CODE END TIM2_IRQn 0 */
   HAL_TIM_IRQHandler(&htim2);
   /* USER CODE BEGIN TIM2_IRQn 1 */
@@ -348,7 +357,7 @@ void TIM2_IRQHandler(void)
 void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
-
+  // 同 TIM2：用于另一路编码器，保持关节角度计数的连续与一致。
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
@@ -390,7 +399,7 @@ void TIM8_TRG_COM_TIM14_IRQHandler(void)
 void DMA1_Stream7_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream7_IRQn 0 */
-
+  // UART5 TX DMA 完成：同步发送状态，继续队列任务；保持 ISR 轻量。
   /* USER CODE END DMA1_Stream7_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_uart5_tx);
   /* USER CODE BEGIN DMA1_Stream7_IRQn 1 */
@@ -404,7 +413,8 @@ void DMA1_Stream7_IRQHandler(void)
 void SPI3_IRQHandler(void)
 {
   /* USER CODE BEGIN SPI3_IRQn 0 */
-
+  // SPI3 可能用于 IMU/外设采样：ISR 仅搬运数据/清标志；
+  // 解析/滤波在任务中进行，减少抖动与延迟。
   /* USER CODE END SPI3_IRQn 0 */
   HAL_SPI_IRQHandler(&hspi3);
   /* USER CODE BEGIN SPI3_IRQn 1 */
@@ -418,7 +428,8 @@ void SPI3_IRQHandler(void)
 void UART4_IRQHandler(void)
 {
   /* USER CODE BEGIN UART4_IRQn 0 */
-
+  // 串口中断转发：结合 DMA 环形缓冲，ISR 仅处理标志/唤醒；
+  // 命令解析与回传在 FreeRTOS 任务中，避免阻塞控制周期。
   /* USER CODE END UART4_IRQn 0 */
   HAL_UART_IRQHandler(&huart4);
   /* USER CODE BEGIN UART4_IRQn 1 */
@@ -432,7 +443,7 @@ void UART4_IRQHandler(void)
 void UART5_IRQHandler(void)
 {
   /* USER CODE BEGIN UART5_IRQn 0 */
-
+  // 备用/传感链路的串口中断处理，同 UART4 的解耦策略。
   /* USER CODE END UART5_IRQn 0 */
   HAL_UART_IRQHandler(&huart5);
   /* USER CODE BEGIN UART5_IRQn 1 */

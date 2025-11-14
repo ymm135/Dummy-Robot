@@ -28,6 +28,12 @@
 /* USER CODE BEGIN Includes */
 #include "common_inc.h"
 #include "communication.hpp"
+// 机械臂相关说明：
+// - FreeRTOS 负责在 MCU 上组织通信与控制任务：
+//   高优先级：USB 延迟中断处理、CAN/UART DMA 完成后的快速搬运；
+//   中优先级：运动控制核心(由 TIM7 100Hz 时基驱动)、命令解析；
+//   低优先级：I2C 传感采集、日志输出、后台维护。
+// - 通过信号量与队列将中断与线程解耦，避免在 ISR 中执行重逻辑，提升稳定性与平滑性。
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

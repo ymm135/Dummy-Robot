@@ -1,17 +1,26 @@
 #include "6dof_kinematic.h"
+/*
+文件概述：
+- 提供 6 轴机械臂的正/逆运动学实现，采用 DH 参数与欧拉角/旋转矩阵互转。
+- 单位约定：输入/输出关节角使用度(°)；FK 输出位置为米(m)；IK 推荐输入位置为毫米(mm)，内部统一换算为米。
+- 算法要点：FK 逐级旋转矩阵相乘获得 R06 与位置；IK 先肩关节两解，再用 SEW 三角形余弦定理求肘上/肘下两解，最后根据 R36 解腕部两解，组合得到 8 套候选解。
+- 数值稳定性：在奇异与边界处使用阈值 1e-6，acos 前做 clamp，姿态奇异时退化处理。
+*/
 
+// 使用 CMSIS-DSP 的 arm_cos_f32/arm_sin_f32，避免通用数学库开销
 inline float cosf(float x)
 {
     return arm_cos_f32(x);
 }
 
+// 同上
 inline float sinf(float x)
 {
     return arm_sin_f32(x);
 }
 
 static void MatMultiply(const float* _matrix1, const float* _matrix2, float* _matrixOut,
-                        const int _m, const int _l, const int _n)
+                        const int _m, const int _l, const int _n) // 通用矩阵乘法：_matrixOut[m×n] = _matrix1[m×l] × _matrix2[l×n]
 {
     float tmp;
     int i, j, k;
@@ -29,7 +38,7 @@ static void MatMultiply(const float* _matrix1, const float* _matrix2, float* _ma
     }
 }
 
-static void RotMatToEulerAngle(const float* _rotationM, float* _eulerAngles)
+static void RotMatToEulerAngle(const float* _rotationM, float* _eulerAngles) // 旋转矩阵 -> 欧拉角 (ZYX)，含奇异处理
 {
     float A, B, C, cb;
 
@@ -59,7 +68,7 @@ static void RotMatToEulerAngle(const float* _rotationM, float* _eulerAngles)
     _eulerAngles[2] = A;
 }
 
-static void EulerAngleToRotMat(const float* _eulerAngles, float* _rotationM)
+static void EulerAngleToRotMat(const float* _eulerAngles, float* _rotationM) // 欧拉角 (ZYX) -> 旋转矩阵
 {
     float ca, cb, cc, sa, sb, sc;
 
@@ -143,11 +152,11 @@ DOF6Kinematic::SolveFK(const DOF6Kinematic::Joint6D_t &_inputJoint6D, DOF6Kinema
     float L0_wt[3];
 
     for (int i = 0; i < 6; i++)
-        q_in[i] = _inputJoint6D.a[i] / RAD_TO_DEG;
+        q_in[i] = _inputJoint6D.a[i] / RAD_TO_DEG; // 关节角(°) -> 弧度
 
     for (int i = 0; i < 6; i++)
     {
-        q[i] = q_in[i] + DH_matrix[i][0];
+        q[i] = q_in[i] + DH_matrix[i][0]; // 加上 DH θ0 偏置
         cosq = cosf(q[i]);
         sinq = sinf(q[i]);
         cosa = cosf(DH_matrix[i][3]);
@@ -179,14 +188,14 @@ DOF6Kinematic::SolveFK(const DOF6Kinematic::Joint6D_t &_inputJoint6D, DOF6Kinema
         P06[i] = L0_bs[i] + L0_se[i] + L0_ew[i] + L0_wt[i];
 
     // 将旋转矩阵转换为欧拉角(内部弧度)
-    RotMatToEulerAngle(R06, &(P06[3]));
+    RotMatToEulerAngle(R06, &(P06[3])); // R06 -> 欧拉角(弧度)
 
     _outputPose6D.X = P06[0];
     _outputPose6D.Y = P06[1];
     _outputPose6D.Z = P06[2];
-    _outputPose6D.A = P06[3] * RAD_TO_DEG;
-    _outputPose6D.B = P06[4] * RAD_TO_DEG;
-    _outputPose6D.C = P06[5] * RAD_TO_DEG;
+    _outputPose6D.A = P06[3] * RAD_TO_DEG; // 姿态弧度 -> 度
+    _outputPose6D.B = P06[4] * RAD_TO_DEG; // 姿态弧度 -> 度
+    _outputPose6D.C = P06[5] * RAD_TO_DEG; // 姿态弧度 -> 度
     memcpy(_outputPose6D.R, R06, 9 * sizeof(float));
 
     return true;
@@ -238,7 +247,7 @@ bool DOF6Kinematic::SolveIK(const DOF6Kinematic::Pose6D_t &_inputPose6D, const J
         P06[3] = _inputPose6D.A / RAD_TO_DEG;
         P06[4] = _inputPose6D.B / RAD_TO_DEG;
         P06[5] = _inputPose6D.C / RAD_TO_DEG;
-        EulerAngleToRotMat(&(P06[3]), R06);
+        EulerAngleToRotMat(&(P06[3]), R06); // 欧拉角(弧度) -> 旋转矩阵 R06
     } else
     {
         memcpy(R06, _inputPose6D.R, 9 * sizeof(float));
@@ -252,12 +261,12 @@ bool DOF6Kinematic::SolveIK(const DOF6Kinematic::Pose6D_t &_inputPose6D, const J
         qw[i][1] = _lastJoint6D.a[4];
         qw[i][2] = _lastJoint6D.a[5];
     }
-    MatMultiply(R06, L6_wrist, L0_wt, 3, 3, 1);
+    MatMultiply(R06, L6_wrist, L0_wt, 3, 3, 1); // wrist 偏移到基坐标系
     for (i = 0; i < 3; i++)
     {
         P0_w[i] = P06[i] - L0_wt[i];
     }
-    if (sqrt(P0_w[0] * P0_w[0] + P0_w[1] * P0_w[1]) <= 0.000001)
+    if (sqrt(P0_w[0] * P0_w[0] + P0_w[1] * P0_w[1]) <= 0.000001) // wrist 与基轴共线的退化情况
     {
         qs[0] = _lastJoint6D.a[0];
         qs[1] = _lastJoint6D.a[0];
@@ -352,7 +361,7 @@ bool DOF6Kinematic::SolveIK(const DOF6Kinematic::Pose6D_t &_inputPose6D, const J
         } else
         {
             atan_a = atan2f(L1_sw[1], L1_sw[0]);
-            acos_a = 0.5f * (l_se_2 + l_sw_2 - l_ew_2) / (l_se * l_sw);
+            acos_a = 0.5f * (l_se_2 + l_sw_2 - l_ew_2) / (l_se * l_sw); // 余弦定理：内积归一化，后续 clamp 处理
             if (acos_a >= 1.0f) acos_a = 0.0f;
             else if (acos_a <= -1.0f) acos_a = (float) M_PI;
             else acos_a = acosf(acos_a);
@@ -515,7 +524,7 @@ bool DOF6Kinematic::SolveIK(const DOF6Kinematic::Pose6D_t &_inputPose6D, const J
 
     for (i = 0; i < 8; i++)
         for (float &j: _outputSolves.config[i].a)
-            j *= RAD_TO_DEG;
+            j *= RAD_TO_DEG; // 弧度 -> 度
 
     return true;
 }
@@ -525,7 +534,7 @@ operator-(const DOF6Kinematic::Joint6D_t &_joints1, const DOF6Kinematic::Joint6D
 {
     DOF6Kinematic::Joint6D_t tmp{};
     for (int i = 0; i < 6; i++)
-        tmp.a[i] = _joints1.a[i] - _joints2.a[i];
+        tmp.a[i] = _joints1.a[i] - _joints2.a[i]; // 逐关节相减
 
     return tmp;
 }

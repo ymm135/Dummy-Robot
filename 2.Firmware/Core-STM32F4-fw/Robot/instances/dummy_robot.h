@@ -54,11 +54,13 @@ private:
 };
 
 
-// DummyRobot：机械臂高层控制封装
-// - 维护当前/目标关节与末端位姿；
-// - 提供 MoveJ/MoveL 规划接口(调用 IK/FK 与边界检查)；
-// - 管理命令模式、速度/加速度与调试辅助；
-// - 将关节角度下发到执行器(CtrlStepMotor)，并从中回读状态。
+/**
+ * @brief DummyRobot：机械臂高层控制封装
+ * - 维护当前/目标关节与末端位姿；
+ * - 提供 MoveJ/MoveL 规划接口(调用 IK/FK 与边界检查)；
+ * - 管理命令模式、速度/加速度与调试辅助；
+ * - 将关节角度下发到执行器(CtrlStepMotor)，并从中回读状态。
+ */
 class DummyRobot
 {
 public:
@@ -71,6 +73,13 @@ public:
     // - INTERRUPTABLE：可被新目标打断；
     // - CONTINUES_TRAJECTORY：连续轨迹；
     // - MOTOR_TUNING：电机调试模式（频率/幅值）。
+    /**
+     * @brief 命令模式
+     * - SEQUENTIAL：顺序到达目标点，队列执行；
+     * - INTERRUPTABLE：可被新目标打断；
+     * - CONTINUES_TRAJECTORY：连续轨迹；
+     * - MOTOR_TUNING：电机调试模式（频率/幅值）。
+     */
     enum CommandMode
     {
         COMMAND_TARGET_POINT_SEQUENTIAL = 1,
@@ -115,11 +124,15 @@ public:
 
 
     // This is the pose when power on.
-    const DOF6Kinematic::Joint6D_t REST_POSE = {0, -73, 180, 0, 0, 0}; // 上电默认姿态(°)
-    const float DEFAULT_JOINT_SPEED = 30;  // degree/s
+    /** 上电默认姿态(°) */
+    const DOF6Kinematic::Joint6D_t REST_POSE = {0, -73, 180, 0, 0, 0};
+    /** 默认关节速度(°/s) */
+    const float DEFAULT_JOINT_SPEED = 30;
     const DOF6Kinematic::Joint6D_t DEFAULT_JOINT_ACCELERATION_BASES = {150, 100, 200, 200, 200, 200};
-    const float DEFAULT_JOINT_ACCELERATION_LOW = 30;    // 0~100
-    const float DEFAULT_JOINT_ACCELERATION_HIGH = 100;  // 0~100
+    /** 加速度档位下限(0~100) */
+    const float DEFAULT_JOINT_ACCELERATION_LOW = 30;
+    /** 加速度档位上限(0~100) */
+    const float DEFAULT_JOINT_ACCELERATION_HIGH = 100;
     const CommandMode DEFAULT_COMMAND_MODE = COMMAND_TARGET_POINT_INTERRUPTABLE;
 
 
@@ -133,25 +146,39 @@ public:
     DummyHand* hand = {nullptr};
 
 
-    // 初始化机器人：设置初始模式/速度等。
+    /** @brief 初始化机器人：设置初始模式/速度等 */
     void Init();
+    /** @brief MoveJ：以关节空间点到点运动到指定姿态；返回 false 表示触及软限或无效 */
     bool MoveJ(float _j1, float _j2, float _j3, float _j4, float _j5, float _j6);
+    /** @brief MoveL：以末端直线到达指定位姿（含 IK 求解与解连续性选择）；返回 false 表示无有效解 */
     bool MoveL(float _x, float _y, float _z, float _a, float _b, float _c);
-    // 直接下发关节角度（带速度限制）。
+    /** @brief 直接下发关节角度（带速度限制） */
     void MoveJoints(DOF6Kinematic::Joint6D_t _joints);
+    /** @brief 设置关节速度(°/s)，范围 0~100，经内部比例 jointSpeedRatio 作用 */
     void SetJointSpeed(float _speed);
+    /** @brief 设置加速度档位(0~100)，按每轴基准加速度缩放 */
     void SetJointAcceleration(float _acc);
-    // 采样并更新关节角度与完成标志。
+    /** @brief 采样并更新关节角度与完成标志 */
     void UpdateJointAngles();
+    /** @brief 定时回调：维护当前角度与完成状态位 */
     void UpdateJointAnglesCallback();
+    /** @brief 更新末端位姿（FK，位置单位转换为毫米用于上位机一致性） */
     void UpdateJointPose6D();
+    /** @brief 重启所有节点/MCU */
     void Reboot();
+    /** @brief 总使能开关（透传到各关节） */
     void SetEnable(bool _enable);
+    /** @brief Home 偏移标定流程（两次置零与复位） */
     void CalibrateHomeOffset();
+    /** @brief 回零流程：暂降速度，两段到位 */
     void Homing();
+    /** @brief 休息位姿：以低速到达 REST_POSE */
     void Resting();
+    /** @brief 是否仍在运动（基于完成状态位） */
     bool IsMoving();
+    /** @brief 是否已使能 */
     bool IsEnabled();
+    /** @brief 设置命令模式（见 CommandMode） */
     void SetCommandMode(uint32_t _mode);
 
 
@@ -182,6 +209,9 @@ public:
     }
 
 
+    /**
+     * @brief 命令处理器：解析 ASCII 命令并入队/出队
+     */
     class CommandHandler
     {
     public:
@@ -190,11 +220,17 @@ public:
             commandFifo = osMessageQueueNew(16, 64, nullptr);
         }
 
+        /** @brief 入队命令字符串，返回剩余空间 */
         uint32_t Push(const std::string &_cmd);
+        /** @brief 出队命令，支持阻塞等待 timeout(ms) */
         std::string Pop(uint32_t timeout);
+        /** @brief 解析并执行命令（根据 CommandMode 分流），返回剩余空间 */
         uint32_t ParseCommand(const std::string &_cmd);
+        /** @brief 获取队列剩余空间 */
         uint32_t GetSpace();
+        /** @brief 清空命令队列 */
         void ClearFifo();
+        /** @brief 急停（预留） */
         void EmergencyStop();
 
 

@@ -1,5 +1,12 @@
 #ifndef __MYI2C_H__
 #define __MYI2C_H__
+/*
+ * 基础特性概览（软件 I2C）
+ * - 职责：基于 GPIO 的位操作实现 I2C 主机，适配简单外设。
+ * - 引脚：默认 PB10(SCL)、PB11(SDA)，可通过宏修改。
+ * - 时序：微秒级延时实现 START/STOP/ACK/NACK；速率受 CPU 影响。
+ * - 场景：在硬件 I2C 受限或需多总线时作为备选；不推荐高带宽传感器。
+ */
 
 #ifdef __cplusplus
 extern "C" {

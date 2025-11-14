@@ -55,6 +55,8 @@
 uint64_t serialNumber;
 char serialNumberStr[13];
 __attribute__((section(".ccmram"))) uint8_t ucHeap[configTOTAL_HEAP_SIZE];
+// 说明：将 FreeRTOS 堆放入 CCM(核心耦合存储器)，该区不挂在主 AHB 总线上，
+// 可降低与外设 DMA 的总线竞争，有助于提高控制循环的一致性与平滑性。
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -131,7 +133,10 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-
+  // 初始化顺序说明：
+  // 1) GPIO/DMA/I2C/SPI/UART/CAN 先行，保证通信与传感链路可用；
+  // 2) TIM2/TIM3 编码器用于读取关节位置；TIM7 在 freertos.c 中由回调驱动控制主循环(100Hz)。
+  // 3) 控制入口位于 FreeRTOS 默认任务中的 C++ Main()，从而与 HAL 初始化解耦。
   /* USER CODE END 2 */
 
   /* Init scheduler */

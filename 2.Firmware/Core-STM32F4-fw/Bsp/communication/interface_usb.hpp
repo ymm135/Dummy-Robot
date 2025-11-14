@@ -1,5 +1,12 @@
 #ifndef __INTERFACE_USB_HPP
 #define __INTERFACE_USB_HPP
+/*
+ * 基础特性概览（USB 接口）
+ * - 职责：USB CDC 通道服务器与统计信息管理。
+ * - USBStats_t：维护收发计数与 TX 过载，便于流控与诊断。
+ * - 入口：usb_rx_process_packet 解析包；StartUsbServer 启动任务与流。
+ * - 模型：采用 FreeRTOS 任务处理，ISR 负责延迟处理/唤醒，保持控制环平稳。
+ */
 
 #ifdef __cplusplus
 

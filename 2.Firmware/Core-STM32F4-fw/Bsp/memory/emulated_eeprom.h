@@ -1,6 +1,13 @@
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __STM32_EEPROM_H
 #define __STM32_EEPROM_H
+/*
+ * 基础特性概览（EEPROM 仿真）
+ * - 职责：在无原生 EEPROM 的 MCU 上用 Flash/RETRAM 模拟 EEPROM。
+ * - 容量：按平台配置计算 E2END；提供缓冲读写接口和直接读写两种模式。
+ * - 模式：存在 DATA_EEPROM_BASE 时直接读写；否则需 buffer_fill/flush 管理缓冲。
+ * - 适用：保存少量参数（标定、ID 等），避免频繁写造成闪存磨损。
+ */
 
 /* Includes ------------------------------------------------------------------*/
 

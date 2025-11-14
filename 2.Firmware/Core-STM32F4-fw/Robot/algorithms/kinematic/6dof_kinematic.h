@@ -5,11 +5,13 @@
 #include "arm_math.h"
 #include "memory.h"
 
-// 6 轴机械臂运动学求解器：
-// - 使用标准 DH 参数描述连杆与关节关系；
-// - 提供正运动学(FK)与逆运动学(IK)求解接口；
-// - 外部角度单位为度(°)，姿态欧拉角也使用度；
-// - 位姿位置单位：FK 输出为米(m)，IK 输入建议为毫米(mm)，内部会换算为米。
+/**
+ * @brief 6 轴机械臂运动学求解器
+ * - 使用标准 DH 参数描述连杆与关节关系；
+ * - 提供正运动学(FK)与逆运动学(IK)求解接口；
+ * - 角度单位为度(°)，姿态欧拉角亦为度；
+ * - 位姿单位：FK 输出位置为米(m)；IK 建议以毫米(mm)传入，内部自动换算为米。
+ */
 
 class DOF6Kinematic
 {
@@ -61,7 +63,8 @@ public:
             : a{a1, a2, a3, a4, a5, a6}
         {}
 
-        float a[6]; // 关节角，单位：度(°)，顺序 J1~J6
+        /** 关节角数组，单位：度(°)，顺序 J1~J6 */
+        float a[6];
 
         friend Joint6D_t operator-(const Joint6D_t &_joints1, const Joint6D_t &_joints2);
     };
@@ -75,13 +78,17 @@ public:
             : X(x), Y(y), Z(z), A(a), B(b), C(c), hasR(false)
         {}
 
-        float X{}, Y{}, Z{}; // 位置：通常以毫米(mm)传入 IK；FK 输出为米(m)
-        float A{}, B{}, C{}; // 欧拉角(度)：绕 ZYX 或 XYZ 的具体定义见实现
-        float R[9]{};        // 旋转矩阵(行优先 3x3)，若手动设置姿态可直接提供
+        /** 位置：通常以毫米(mm)传入 IK；FK 输出为米(m) */
+        float X{}, Y{}, Z{};
+        /** 欧拉角(度)：绕 ZYX 或 XYZ 的具体定义见实现 */
+        float A{}, B{}, C{};
+        /** 旋转矩阵(行优先 3x3)，若手动设置姿态可直接提供 */
+        float R[9]{};
 
         // if Pose was calculated by FK then it's true automatically (so that no need to do extra calc),
         // otherwise if manually set params then it should be set to false.
-        bool hasR{}; // true 表示 R 已就绪，无需由欧拉角再计算
+        /** true 表示 R 已就绪，无需由欧拉角再计算 */
+        bool hasR{};
     };
 
     struct IKSolves_t
@@ -92,11 +99,21 @@ public:
 
     DOF6Kinematic(float L_BS, float D_BS, float L_AM, float L_FA, float D_EW, float L_WT);
 
-    // 正运动学：输入关节角(度)，输出末端位姿(位置 m、姿态度，并给出旋转矩阵)
+    /**
+     * @brief 正运动学(FK)
+     * @param _inputJoint6D 输入关节角(度，J1~J6)
+     * @param _outputPose6D 输出末端位姿：位置(米)、姿态(度)、旋转矩阵 R06
+     * @return true 固定返回成功（当前实现无失败路径）
+     */
     bool SolveFK(const Joint6D_t &_inputJoint6D, Pose6D_t &_outputPose6D);
 
-    // 逆运动学：输入末端位姿(位置建议 mm，姿态度或 R)，以及上一时刻关节角(用于选择连续解)
-    // 输出 8 组候选解(config[0..7])，并通过 solFlag 标记肩/肘/腕的解存在性与奇异性。
+    /**
+     * @brief 逆运动学(IK)
+     * @param _inputPose6D 输入末端位姿：位置建议以毫米(mm)传入；姿态以度或直接给 R；
+     * @param _lastJoint6D 上一时刻关节角（用于选择连续的候选解）
+     * @param _outputSolves 输出 8 组候选解(config[0..7])；solFlag 标记肩/肘/腕解的存在性与奇异性
+     * @return true 固定返回成功（当前实现无失败路径）
+     */
     bool SolveIK(const Pose6D_t &_inputPose6D, const Joint6D_t &_lastJoint6D, IKSolves_t &_outputSolves);
 };
 

@@ -1,4 +1,10 @@
 #include "time_utils.h"
+/*
+ * 基础特性概览（实现说明）
+ * - micros：通过 SysTick LOAD/VAL 与 COUNTFLAG 组合，得到近似微秒值。
+ * - millis：直接取 HAL_GetTick（毫秒）。
+ * - delayMicroseconds：基于空循环的简易延时，适合极短时间补偿；忙等会占用 CPU。
+ */
 
 __STATIC_INLINE uint32_t LL_SYSTICK_IsActiveCounterFlag(void)
 {

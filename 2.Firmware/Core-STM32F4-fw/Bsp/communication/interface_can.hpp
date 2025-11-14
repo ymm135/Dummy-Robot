@@ -1,5 +1,13 @@
 #ifndef __INTERFACE_CAN_HPP
 #define __INTERFACE_CAN_HPP
+/*
+ * 基础特性概览（CAN 接口）
+ * - 职责：维护 CAN 上下文（句柄、节点 ID/序列号、心跳邮箱、统计计数）。
+ * - 活跃跟踪：两组 128bit 位图追踪近两秒节点占用，辅助节点 ID 冲突避免。
+ * - 同步机制：心跳发送用信号量；Rx/Tx 统计便于诊断总线异常。
+ * - 入口函数：StartCanServer 启动服务；OnCanMessage 处理消息；CanSendMessage 封装发送。
+ * - 设计原则：ISR 中仅转发到 HAL 回调，解析/路由在任务层完成，减少阻塞。
+ */
 
 #include "fibre/protocol.hpp"
 #include <stm32f4xx_hal.h>

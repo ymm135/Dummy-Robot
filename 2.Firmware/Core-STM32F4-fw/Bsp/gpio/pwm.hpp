@@ -1,5 +1,12 @@
 #ifndef REF_STM32F4_PWM_H
 #define REF_STM32F4_PWM_H
+/*
+ * 基础特性概览（PWM 输出）
+ * - 职责：封装 TIM9/TIM12 的四路 PWM 输出，用于驱动舵机/电机等。
+ * - 频率：构造时分别设置 A/B 两组频率；占空比范围 0~1。
+ * - 通道：CH_A1/CH_A2/CH_B1/CH_B2，支持 CH_ALL 一键设置。
+ * - 时序：在控制任务中更新占空比，确保与 10ms 控制周期同步。
+ */
 
 #include <cstdint>
 #include <tim.h>

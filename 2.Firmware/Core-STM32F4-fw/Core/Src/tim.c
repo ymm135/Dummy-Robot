@@ -21,6 +21,11 @@
 #include "tim.h"
 
 /* USER CODE BEGIN 0 */
+// 机械臂相关说明：
+// - TIM2/TIM3 以编码器模式接入外部增量式编码器，提供高分辨率关节角度计数。
+//   encCntLoop[] 用于记录 16-bit 计数器的溢出/下溢圈数，实现 64-bit 累计计数，支持长时间连续运行。
+// - TIM7 作为控制时基：当前配置 Prescaler=83, Period=9999，等效 84MHz/84/10000=100Hz，适于 10ms 控制周期。
+//   在 HAL_TIM_PeriodElapsedCallback 中触发运动控制主循环或调度任务，确保节拍稳定性。
 volatile int64_t encCntLoop[2];
 
 /* USER CODE END 0 */
@@ -156,7 +161,8 @@ void MX_TIM7_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM7_Init 2 */
-
+  // 控制时基：10ms 周期(100Hz)。建议在此启动中断并在回调中驱动控制循环，
+  // 保持关节位置/速度采样与指令下发的节奏统一以提升平滑性与稳定性。
   /* USER CODE END TIM7_Init 2 */
 
 }

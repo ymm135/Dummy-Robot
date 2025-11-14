@@ -1,8 +1,15 @@
 #include "communication.hpp"
 #include "dummy_robot.h"
 #include <stdio.h>
+/*
+文件概述：
+- DummyRobot 负责关节层调度、模式管理与命令解析，通过 CAN 与驱动交互。
+- 主要流程：接收主机命令 -> 解析为 MoveJ/MoveL -> 分配速度/加速度 -> 定时回调采样角度与完成位 -> 反馈当前位姿。
+- 单位约定：关节角度使用度(°)；位姿位置输入/输出对外均为毫米(mm)，FK/IK 内部使用米(m)。
+- 稳定/顺滑：软限位检查、最大角速度统一总时长、按减速比做角度-电机圈换算、可中断/阻塞模式控制。
+*/
 
-inline float AbsMaxOf6(DOF6Kinematic::Joint6D_t _joints, uint8_t &_index)
+inline float AbsMaxOf6(DOF6Kinematic::Joint6D_t _joints, uint8_t &_index) // 返回绝对值最大的关节角及其索引
 {
     float max = -1;
     for (uint8_t i = 0; i < 6; i++)
@@ -57,7 +64,7 @@ void DummyRobot::Init()
 void DummyRobot::Reboot()
 {
     motorJ[ALL]->Reboot();
-    osDelay(500); // waiting for all joints done
+    osDelay(500); // 等待所有关节处理完成(驱动侧延迟/应答)
     HAL_NVIC_SystemReset();
 }
 
@@ -67,7 +74,7 @@ void DummyRobot::MoveJoints(DOF6Kinematic::Joint6D_t _joints)
     for (int j = 1; j <= 6; j++)
     {
         motorJ[j]->SetAngleWithVelocityLimit(_joints.a[j - 1] - initPose.a[j - 1],
-                                             dynamicJointSpeeds.a[j - 1]);
+                                             dynamicJointSpeeds.a[j - 1]); // 目标角与初始化偏置之差，按动态速度限下发
     }
 }
 
@@ -99,10 +106,10 @@ bool DummyRobot::MoveJ(float _j1, float _j2, float _j3, float _j4, float _j5, fl
         for (int j = 1; j <= 6; j++)
         {
             dynamicJointSpeeds.a[j - 1] =
-                abs(deltaJoints.a[j - 1] * (float) (motorJ[j]->reduction) / time * 0.1f); //0~10r/s
+                abs(deltaJoints.a[j - 1] * (float) (motorJ[j]->reduction) / time * 0.1f); // 统一总时长分配各轴电机速度(0~10 r/s)
         }
 
-        jointsStateFlag = 0;
+        jointsStateFlag = 0; // 清除完成标志，进入运动中
         targetJoints = targetJointsTmp;
 
         return true;
@@ -156,7 +163,7 @@ bool DummyRobot::MoveL(float _x, float _y, float _z, float _a, float _b, float _
                 for (int j = 0; j < 6; j++)
                     lastJoint6D.a[j] = ikSolves.config[i].a[j];
                 DOF6Kinematic::Joint6D_t tmp = currentJoints - lastJoint6D;
-                float maxAngle = AbsMaxOf6(tmp, indexJoint);
+                float maxAngle = AbsMaxOf6(tmp, indexJoint); // 选择与当前关节差异最小的解，保证连续性
                 if (maxAngle < min)
                 {
                     min = maxAngle;
@@ -187,9 +194,9 @@ void DummyRobot::UpdateJointAnglesCallback()
         currentJoints.a[i - 1] = motorJ[i]->angle + initPose.a[i - 1];
 
         if (motorJ[i]->state == CtrlStepMotor::FINISH)
-            jointsStateFlag |= (1 << i);
+            jointsStateFlag |= (1 << i); // bit1..bit6 为各关节完成位
         else
-            jointsStateFlag &= ~(1 << i);
+            jointsStateFlag &= ~(1 << i); // 未完成则清除对应位
     }
 }
 
@@ -199,7 +206,7 @@ void DummyRobot::SetJointSpeed(float _speed)
     if (_speed < 0)_speed = 0;
     else if (_speed > 100) _speed = 100;
 
-    jointSpeed = _speed * jointSpeedRatio;
+    jointSpeed = _speed * jointSpeedRatio; // 模式相关速度比例系数(轨迹模式降低)
 }
 
 
@@ -209,7 +216,7 @@ void DummyRobot::SetJointAcceleration(float _acc)
     else if (_acc > 100) _acc = 100;
 
     for (int i = 1; i <= 6; i++)
-        motorJ[i]->SetAcceleration(_acc / 100 * DEFAULT_JOINT_ACCELERATION_BASES.a[i - 1]);
+        motorJ[i]->SetAcceleration(_acc / 100 * DEFAULT_JOINT_ACCELERATION_BASES.a[i - 1]); // 各轴基准加速度按百分比缩放
 }
 
 
@@ -226,17 +233,17 @@ void DummyRobot::CalibrateHomeOffset()
     osDelay(500);
 
     // 2.Apply Home-Offset the first time
-    motorJ[ALL]->ApplyPositionAsHome();
+    motorJ[ALL]->ApplyPositionAsHome(); // 将当前编码位置写入为零点(偏置)
     osDelay(500);
 
     // 3.Go to Resting-Pose
     initPose = DOF6Kinematic::Joint6D_t(0, 0, 90, 0, 0, 0);
     currentJoints = DOF6Kinematic::Joint6D_t(0, 0, 90, 0, 0, 0);
-    Resting();
+    Resting(); // 先回到休止姿态确保偏置一致
     osDelay(500);
 
     // 4.Apply Home-Offset the second time
-    motorJ[ALL]->ApplyPositionAsHome();
+    motorJ[ALL]->ApplyPositionAsHome(); // 再次写零点以消除累计误差
     osDelay(500);
     motorJ[2]->SetCurrentLimit(1);
     motorJ[3]->SetCurrentLimit(1);
@@ -295,7 +302,7 @@ void DummyRobot::UpdateJointPose6D()
 
 bool DummyRobot::IsMoving()
 {
-    return jointsStateFlag != 0b1111110;
+    return jointsStateFlag != 0b1111110; // 全 6 轴到位时为 0b1111110(忽略 bit0)
 }
 
 
@@ -317,12 +324,12 @@ void DummyRobot::SetCommandMode(uint32_t _mode)
     {
         case COMMAND_TARGET_POINT_SEQUENTIAL:
         case COMMAND_TARGET_POINT_INTERRUPTABLE:
-            jointSpeedRatio = 1;
+            jointSpeedRatio = 1; // 目标点模式：全速、低加速度
             SetJointAcceleration(DEFAULT_JOINT_ACCELERATION_LOW);
             break;
         case COMMAND_CONTINUES_TRAJECTORY:
             SetJointAcceleration(DEFAULT_JOINT_ACCELERATION_HIGH);
-            jointSpeedRatio = 0.3;
+            jointSpeedRatio = 0.3; // 连续轨迹：降低速度、提高加速度以跟随轨迹
             break;
         case COMMAND_MOTOR_TUNING:
             break;
@@ -393,7 +400,7 @@ uint32_t DummyRobot::CommandHandler::Push(const std::string &_cmd)
 {
     osStatus_t status = osMessageQueuePut(commandFifo, _cmd.c_str(), 0U, 0U);
     if (status == osOK)
-        return osMessageQueueGetSpace(commandFifo);
+        return osMessageQueueGetSpace(commandFifo); // 返回剩余空间以便上位机掌握队列负载
 
     return 0xFF; // failed
 }
@@ -404,7 +411,7 @@ void DummyRobot::CommandHandler::EmergencyStop()
     context->MoveJ(context->currentJoints.a[0], context->currentJoints.a[1], context->currentJoints.a[2],
                    context->currentJoints.a[3], context->currentJoints.a[4], context->currentJoints.a[5]);
     context->MoveJoints(context->targetJoints);
-    context->isEnabled = false;
+    context->isEnabled = false; // 禁用周期下发，停止后续命令
     ClearFifo();
 }
 
@@ -426,6 +433,7 @@ uint32_t DummyRobot::CommandHandler::GetSpace()
 uint32_t DummyRobot::CommandHandler::ParseCommand(const std::string &_cmd)
 {
     uint8_t argNum;
+    // 命令语法：'>' 关节角，'@' 位姿；末尾可选速度参数。根据模式选择阻塞/可中断。
 
     switch (context->commandMode)
     {
@@ -541,7 +549,7 @@ void DummyRobot::TuningHelper::SetTuningFlag(uint8_t _flag)
 }
 
 
-void DummyRobot::TuningHelper::Tick(uint32_t _timeMillis)
+void DummyRobot::TuningHelper::Tick(uint32_t _timeMillis) // 正弦扫频：delta = amp * sin(2π f t)
 {
     time += PI * 2 * frequency * (float) _timeMillis / 1000.0f;
     float delta = amplitude * sinf(time);

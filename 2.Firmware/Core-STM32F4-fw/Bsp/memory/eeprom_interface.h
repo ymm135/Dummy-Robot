@@ -1,5 +1,12 @@
 #ifndef FlashStorage_STM32_h
 #define FlashStorage_STM32_h
+/*
+ * 基础特性概览（EEPROM C++ 封装）
+ * - 职责：封装 EEPROM 仿真接口，提供 read/update/write/get/put/commit。
+ * - 策略：支持立即提交或延迟提交；内部维护 dirty/valid 状态。
+ * - 使用：调用 put/update 写入，按需 commit 将缓冲刷写到 Flash。
+ * - 提示：频繁 commit 会缩短 Flash 寿命，建议合并提交。
+ */
 
 
 #if !(defined(STM32F0) || defined(STM32F1) || defined(STM32F2) || defined(STM32F3) || defined(STM32F4) || defined(STM32F7) || \

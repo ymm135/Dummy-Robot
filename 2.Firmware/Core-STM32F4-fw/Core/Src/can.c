@@ -21,7 +21,14 @@
 #include "can.h"
 
 /* USER CODE BEGIN 0 */
-
+/*
+机械臂相关说明：
+- 本项目通过 CAN 总线与各关节驱动(步进/手爪等)通信，CAN1/2 可分别挂接不同节点网段。
+- 速率配置约 1Mbps(参考位时序注释)，满足 6 轴关节状态与命令的实时交互。
+- 报文约定：使用标准帧 StdId，编码规则为 `(nodeID << 7) | mode`，数据区按驱动协议发送。
+- 建议过滤器策略：接收本节点的反馈与广播，发送队列通过互斥信号量在 FreeRTOS 中序列化，避免冲突。
+- 结合 Robot/actuators/ctrl_step：位置/速度/电流命令均在该模块封装，CAN 初始化需保证正常启动与唤醒。
+*/
 /* USER CODE END 0 */
 
 CAN_HandleTypeDef hcan1;

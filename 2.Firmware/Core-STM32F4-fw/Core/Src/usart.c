@@ -21,7 +21,14 @@
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
-
+// 机械臂相关说明：
+// - UART4 作为主命令链路：RX 使用 DMA(循环缓冲) 长流接收；
+//   TX 使用 DMA(普通) 分包发送，减轻中断负担，提升平滑性。
+// - UART5 作为备用/扩展链路：用于传感器侧或冗余上位机；
+//   同样配置 DMA 与 NVIC，便于统一处理。
+// - USART1 通常用于调试日志；建议配合轻量化日志宏，避免阻塞控制周期。
+// - 建议在 FreeRTOS 中以任务+队列实现命令解析与回传，与运动控制核心解耦；
+//   串口 ISR 仅做缓冲迁移与唤醒。
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart4;

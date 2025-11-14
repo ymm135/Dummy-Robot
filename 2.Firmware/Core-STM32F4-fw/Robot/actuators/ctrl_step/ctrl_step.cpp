@@ -2,6 +2,13 @@
 #include "communication.hpp"
 
 
+// CAN 报文说明：
+// - 使用标准帧 StdId，格式为 (nodeID << 7) | mode；
+// - 数据区按驱动协议约定，浮点/整数通过字节序列发送；
+// - 位置/速度/电流等命令的单位以驱动固件为准，此文件负责关节角与电机圈的换算。
+// - 模式码约定：0x01 使能，0x02 校准，0x03 电流设定，0x04 速度设定，0x05 位置设定，0x07 位置+速度限，
+//   0x11~0x1B 参数写入，0x23 角度查询，0x7E(擦除配置)/0x7F(重启)。
+// - 字节序：浮点/整型均按 little-endian 发送；canBuf[4] 作为“需要保存/应答”标志，含义随不同命令约定。
 // 构造：指定节点 ID、方向反转、减速比(电机圈/关节圈)与关节角度软限位。
 CtrlStepMotor::CtrlStepMotor(CAN_HandleTypeDef* _hcan, uint8_t _id, bool _inverse,
                              uint8_t _reduction, float _angleLimitMin, float _angleLimitMax) :
@@ -22,7 +29,7 @@ CtrlStepMotor::CtrlStepMotor(CAN_HandleTypeDef* _hcan, uint8_t _id, bool _invers
 
 void CtrlStepMotor::SetEnable(bool _enable)
 {
-    state = _enable ? FINISH : STOP;
+    state = _enable ? FINISH : STOP; // 本地状态：使能视为“待命/已到位”，关闭视为停止
 
     uint8_t mode = 0x01;
     txHeader.StdId = nodeID << 7 | mode;
@@ -39,7 +46,7 @@ void CtrlStepMotor::SetEnable(bool _enable)
 
 void CtrlStepMotor::DoCalibration()
 {
-    uint8_t mode = 0x02;
+    uint8_t mode = 0x02; // 启动驱动侧校准/回零流程
     txHeader.StdId = nodeID << 7 | mode;
 
     CanSendMessage(get_can_ctx(hcan), canBuf, &txHeader);
@@ -102,7 +109,7 @@ void CtrlStepMotor::SetPositionWithVelocityLimit(float _pos, float _vel)
     auto* b = (unsigned char*) &_pos;
     for (int i = 0; i < 4; i++)
         canBuf[i] = *(b + i);
-    b = (unsigned char*) &_vel;
+    b = (unsigned char*) &_vel; // 速度上限(单位由驱动侧定义)
     for (int i = 4; i < 8; i++)
         canBuf[i] = *(b + i - 4);
 
@@ -249,10 +256,10 @@ void CtrlStepMotor::SetAngleWithVelocityLimit(float _angle, float _vel)
 
 void CtrlStepMotor::UpdateAngle()
 {
-    uint8_t mode = 0x23;
+    uint8_t mode = 0x23; // 角度查询命令
     txHeader.StdId = nodeID << 7 | mode;
 
-    CanSendMessage(get_can_ctx(hcan), canBuf, &txHeader);
+    CanSendMessage(get_can_ctx(hcan), canBuf, &txHeader); // 驱动侧完成后会通过对应回调返回角度
 }
 
 
@@ -263,10 +270,11 @@ void CtrlStepMotor::UpdateAngleCallback(float _pos, bool _isFinished)
 
     // 电机圈 -> 角度：motor_turns / reduction * 360°
     float tmp = _pos / (float) reduction * 360;
-    angle = inverseDirection ? -tmp : tmp;
+    angle = inverseDirection ? -tmp : tmp; // 统一到关节角(°)，考虑方向反转
 }
 
 
+// 参数调试：位置/速度/电流闭环系数写入 (DCE Kp/Kv/Ki/Kd)，具体含义由驱动固件定义
 void CtrlStepMotor::SetDceKp(int32_t _val)
 {
     uint8_t mode = 0x17;

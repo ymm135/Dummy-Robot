@@ -1,5 +1,13 @@
 #ifndef REF_STM32F4_ENCODER_HPP
 #define REF_STM32F4_ENCODER_HPP
+/*
+ * 基础特性概览（编码器接口）
+ * - 职责：封装 TIM 编码器模式，提供累计计数与角度计算（度/弧度）。
+ * - 数据来源：TIM2/TIM3 16bit 计数配合 encCntLoop 实现 64bit 累加，避免溢出。
+ * - 配置项：cpr（每转脉冲数），inverse（方向反转）。
+ * - 协议：通过 MakeProtocolDefinitions 暴露属性与函数至 Fibre。
+ * - 使用：构造传入 HAL TIM 句柄；Start 启动；GetCount/GetAngle 查询。
+ */
 
 #include <fibre/protocol.hpp>
 #include "tim.h"
